@@ -1,0 +1,41 @@
+[ req ]
+distinguished_name      = req_distinguished_name
+prompt                  = no
+
+[ req_distinguished_name ]
+CN                      = Fruit CA
+
+[ ca ]
+default_ca              = Fruit
+prompt                  = no
+
+[ Fruit ]
+dir                     = ca
+certs                   = $dir
+new_certs_dir           = $dir/certs
+database                = $dir/index
+serial                  = $dir/serial
+RANDFILE                = $dir/rand
+certificate             = $dir/certificate
+private_key             = $dir/key
+default_startdate       = 19700101000000Z
+default_enddate         = 20380119031407Z
+default_md              = sha512
+preserve                = no
+unique_subject          = no
+policy                  = policy_anything
+x509_extensions         = x509_extensions
+copy_extensions         = copy
+
+[ policy_anything ]
+commonName              = supplied
+emailAddress            = optional
+organizationalUnitName  = optional
+organizationName        = optional
+localityName            = optional
+stateOrProvinceName     = optional
+countryName             = optional
+
+[ x509_extensions ]
+basicConstraints        = critical,CA:TRUE
+keyUsage                = critical,keyCertSign,cRLSign

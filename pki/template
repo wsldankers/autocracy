@@ -1,0 +1,17 @@
+[ req ]
+default_keyfile         = template.key
+default_md              = sha512
+distinguished_name      = req_distinguished_name
+attributes              = req_attributes
+prompt                  = no
+req_extensions          = req_extensions
+
+[ req_distinguished_name ]
+C                       = NL
+O                       = Fruit
+CN                      = template
+
+[ req_attributes ]
+
+[ req_extensions ]
+subjectAltName          = DNS:template

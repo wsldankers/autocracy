@@ -1,0 +1,46 @@
+oid_section             = extra_oids
+
+[ ca ]
+default_ca              = Fruit
+
+[ Fruit ]
+dir                     = ca
+certs                   = $dir
+new_certs_dir           = $dir/certs
+database                = $dir/index
+serial                  = $dir/serial
+RANDFILE                = $dir/rand
+certificate             = $dir/certificate
+private_key             = $dir/key
+default_startdate       = 19700101000000Z
+default_enddate         = 20380119031407Z
+default_md              = sha512
+preserve                = yes
+unique_subject          = no
+policy                  = policy_anything
+x509_extensions         = x509_extensions
+copy_extensions         = copy
+
+[ policy_anything ]
+commonName              = supplied
+emailAddress            = optional
+organizationalUnitName  = optional
+organizationName        = optional
+localityName            = optional
+stateOrProvinceName     = optional
+countryName             = optional
+uid                     = optional
+dc                      = optional
+
+[ x509_extensions ]
+basicConstraints        = critical,CA:FALSE
+keyUsage                = digitalSignature,keyEncipherment,keyAgreement
+extendedKeyUsage        = clientAuth
+#extendedKeyUsage        = serverAuth
+#extendedKeyUsage        = serverAuth, clientAuth
+#subjectKeyIdentifier    = hash
+#authorityKeyIdentifier  = keyid:always, issuer:always
+
+[ extra_oids ]
+#uid = 1.3.6.1.4.1.1466.115.121.1.15
+dc = 1.3.6.1.4.1.1466.115.121.1.26
