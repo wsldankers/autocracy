@@ -230,6 +230,7 @@ async def main(base_dir):
 
     async with aiohttp.ClientSession(raise_for_status=True) as session:
         connect_sleep = 0
+        connect_errors = set()
 
         while True:
             try:
@@ -238,11 +239,15 @@ async def main(base_dir):
                     compress=11,
                     ssl=tls,
                 ) as ws:
+                    connect_errors.clear()
                     client = Client(ws=ws)
                     await client()
 
             except aiohttp.client_exceptions.ClientConnectorError as e:
-                warn(str(e))
+                connect_error = str(e)
+                if connect_error not in connect_errors:
+                    connect_errors.add(connect_error)
+                    warn(connect_error)
 
             connect_sleep = min(connect_sleep + 1, max_connect_interval)
             await asyncio.sleep(connect_sleep)
