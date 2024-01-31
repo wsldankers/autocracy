@@ -148,42 +148,40 @@ class Client(BaseClient):
     async def apply(self) -> None:
         warn("apply()")
         name = self.name
-        rpc = self.rpc
-        ws = self.ws
-        confpath = self.confpath
-        old_files: dict[str, stat_result] = {}
-        new_files: dict[str, stat_result] = {}
-        new_content: dict[str, bytes] = {}
-        remotely_known_files = self.remotely_known_files
 
-        repository = Repository(root=confpath)
+        repository = Repository(root=self.confpath)
 
         facts = Object(self.facts or {})
         decree = loadconfig(name, repository.get_file, facts=facts)
         # decree.provision(repository)
 
+        rpc = self.rpc
+
+        remotely_known_files = self.remotely_known_files
         repository_files = repository.files
-        for file, (content, st) in repository_files.items():
-            if remotely_known_files.get(file) == st:
-                old_files[file] = st
-            else:
-                new_files[file] = st
-                new_content[str(file)] = content
 
         stale_config_files = remotely_known_files.keys() - repository_files.keys()
         if stale_config_files:
             await rpc.remote_command(
                 'discard_files', *sorted(stale_config_files), rsvp=False
             )
+
+        new_content: dict[str, bytes] = {
+            file: content
+            for file, (content, st) in repository_files.items()
+            if remotely_known_files.get(file) != st
+        }
+
         if new_content:
             new_content_keys = sorted(new_content)
             await rpc.remote_command('accept_files', *new_content_keys, rsvp=False)
+            ws = self.ws
             for key in new_content_keys:
                 await ws.send_bytes(new_content[key])
 
         remotely_known_files.clear()
-        remotely_known_files.update(old_files)
-        remotely_known_files.update(new_files)
+        for file, (_, st) in repository_files.items():
+            remotely_known_files[file] = st
 
         await rpc.remote_command('apply', name, rsvp=False)
 
