@@ -1,6 +1,6 @@
 from pathlib import Path, PurePath
 from functools import update_wrapper
-from typing import Iterable, Any
+from typing import Iterable, Any, TypeVar, Callable, cast, TYPE_CHECKING
 from sys import stderr
 from functools import wraps
 from weakref import ref as weakref
@@ -14,32 +14,40 @@ class Initializer:
         super().__init__(*args)
 
 
-class initializer:
-    def __init__(self, getfunction):
-        self.getfunction = getfunction
-        self.name = getfunction.__name__
-        update_wrapper(self, getfunction)
+if TYPE_CHECKING:
+    ReturnValue = TypeVar("ReturnValue")
 
-    def __set_name__(self, objtype, name):
-        self.name = name
+    def initializer(f: Callable[..., ReturnValue]) -> ReturnValue:
+        return cast(ReturnValue, None)
 
-    def __get__(self, obj, objtype=None):
-        try:
-            objdict = vars(obj)
-        except AttributeError:
-            if obj is None:
-                # This typically happens when querying for docstrings,
-                # so return something with the appropriate docstring.
-                return self
-            raise
+else:
 
-        value = self.getfunction(obj)
-        objdict[self.name] = value
-        return value
+    class initializer:
+        def __init__(self, getfunction):
+            self.getfunction = getfunction
+            self.name = getfunction.__name__
+            update_wrapper(self, getfunction)
 
-    @property
-    def __isabstractmethod__(self):
-        return getattr(self.getfunction, '__isabstractmethod__', False)
+        def __set_name__(self, objtype, name):
+            self.name = name
+
+        def __get__(self, obj, objtype=None):
+            try:
+                objdict = vars(obj)
+            except AttributeError:
+                if obj is None:
+                    # This typically happens when querying for docstrings,
+                    # so return something with the appropriate docstring.
+                    return self
+                raise
+
+            value = self.getfunction(obj)
+            objdict[self.name] = value
+            return value
+
+        @property
+        def __isabstractmethod__(self):
+            return getattr(self.getfunction, '__isabstractmethod__', False)
 
 
 class weakproperty(property):

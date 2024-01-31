@@ -1,7 +1,15 @@
 import asyncio
 import aiohttp.web
 from typing import Optional, Iterable
-from os import umask, stat, geteuid
+from os import (
+    umask,
+    stat,
+    geteuid,
+    fwalk,
+    open as os_open,
+    close as os_close,
+    stat_result,
+)
 from sys import stderr
 from pathlib import Path
 from ssl import create_default_context, Purpose, TLSVersion, CERT_REQUIRED
@@ -10,15 +18,72 @@ from traceback import print_exc
 from struct import Struct
 from socket import SOL_SOCKET, SO_PEERCRED
 from pwd import getpwuid
+from weakref import WeakValueDictionary
+from stat import S_ISREG
 
 from .rpc import RPC
 from .utils import *
-from .common import loadconfig, DuplicateConfigfile
+from .common import loadconfig, DuplicateConfigfile, BaseRepository
 
 
 web = aiohttp.web
 
 peercred_struct = Struct('3i')
+
+
+def throw(exception):
+    raise exception
+
+
+class Repository(BaseRepository):
+    root: Path
+
+    @initializer
+    def files(self) -> dict[str, tuple[bytes, stat_result]]:
+        return {}
+
+    def get_file(self, path: str | Path) -> bytes:
+        normalized_path = str(normalize_path(path))
+        files = self.files
+        try:
+            content, _ = files[normalized_path]
+            return content
+        except KeyError:
+            pass
+        with (self.root / normalized_path).open('rb') as fh:
+            st = stat(fh.fileno())
+            if not S_ISREG(st.st_mode):
+                raise RuntimeError(f"{normalized_path} is not a file")
+            content = fh.read()
+        files[normalized_path] = (content, st)
+        return content
+
+    def get_files(self, path: str | Path) -> Iterable[bytes]:
+        normalized_path = str(normalize_path(path))
+        root = self.root
+        files = self.files
+        for parent, _, file_entries, dir_fd in fwalk(
+            root / normalized_path,
+            onerror=throw,
+        ):
+            parent_path = Path(parent).relative_to(root)
+
+            def opener(path, flags):
+                return os_open(path, flags, dir_fd=dir_fd)
+
+            for file_entry in file_entries:
+                file_path = str(parent_path / file_entry)
+                try:
+                    content, _ = files[file_path]
+                except KeyError:
+                    with open(file_entry, 'rb', opener=opener) as fh:
+                        st = stat(fh.fileno())
+                        if not S_ISREG(st.st_mode):
+                            warn(f"{file_path} is not a file, skipping")
+                            continue
+                        content = fh.read()
+                    files[file_path] = (content, st)
+                yield content
 
 
 class BaseClient(Initializer):
@@ -73,7 +138,7 @@ class Client(BaseClient):
         )
 
     @initializer
-    def remotely_known_files(self) -> dict[str, tuple[int, int]]:
+    def remotely_known_files(self) -> dict[str, stat_result]:
         return {}
 
     async def accept_facts(self, facts) -> None:
@@ -86,47 +151,35 @@ class Client(BaseClient):
         rpc = self.rpc
         ws = self.ws
         confpath = self.confpath
-        old_files: dict[str, tuple[int, int]] = {}
-        new_files: dict[str, tuple[int, int]] = {}
+        old_files: dict[str, stat_result] = {}
+        new_files: dict[str, stat_result] = {}
         new_content: dict[str, bytes] = {}
         remotely_known_files = self.remotely_known_files
 
-        def load_file(filename: str | Path):
-            full_filename = confpath / normalize_path(filename)
-            warn(full_filename)
-            filename = str(filename)
-            try:
-                return new_content[filename]
-            except KeyError:
-                pass
-            with open(full_filename, 'rb') as fh:
-                st = stat(fh.fileno())
-                st_mtime_size = (st.st_mtime_ns, st.st_size)
-                content = fh.read()
-            if remotely_known_files.get(filename) == st_mtime_size:
-                old_files[filename] = st_mtime_size
+        repository = Repository(root=confpath)
+
+        facts = Object(self.facts or {})
+        decree = loadconfig(name, repository.get_file, facts=facts)
+        # decree.provision(repository)
+
+        repository_files = repository.files
+        for file, (content, st) in repository_files.items():
+            if remotely_known_files.get(file) == st:
+                old_files[file] = st
             else:
-                new_files[filename] = st_mtime_size
-                new_content[filename] = content
-            return content
+                new_files[file] = st
+                new_content[str(file)] = content
 
-        decree = loadconfig(name, load_file, facts=Object(self.facts or {}))
-
-        required_resources: Iterable[str] = decree._required_resources
-        for resource in required_resources:
-            load_file(normalize_path(resource))
-
-        stale_config_files = (
-            remotely_known_files.keys() - old_files.keys() - new_files.keys()
-        )
+        stale_config_files = remotely_known_files.keys() - repository_files.keys()
         if stale_config_files:
             await rpc.remote_command(
                 'discard_files', *sorted(stale_config_files), rsvp=False
             )
         if new_content:
-            await rpc.remote_command('accept_files', *new_content, rsvp=False)
-            for content in new_content.values():
-                await ws.send_bytes(content)
+            new_content_keys = sorted(new_content)
+            await rpc.remote_command('accept_files', *new_content_keys, rsvp=False)
+            for key in new_content_keys:
+                await ws.send_bytes(new_content[key])
 
         remotely_known_files.clear()
         remotely_known_files.update(old_files)

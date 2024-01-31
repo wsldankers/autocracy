@@ -4,6 +4,7 @@ from weakref import ref as weakref
 from subprocess import run
 from inspect import currentframe
 from typing import Callable, Mapping, Iterable, Optional, Any
+from abc import ABC, abstractmethod
 
 from .utils import *
 
@@ -12,6 +13,16 @@ class loadfilename(str):
     """To recognize loaded filenames by"""
 
     __slots__ = ()
+
+
+class BaseRepository(ABC, Initializer):
+    @abstractmethod
+    def get_file(self, path: str | Path) -> bytes:
+        pass
+
+    @abstractmethod
+    def get_files(self, path: str | Path) -> Iterable[bytes]:
+        pass
 
 
 class Subject:
@@ -297,6 +308,7 @@ def loadconfig(
 
 
 __all__ = (
+    'BaseRepository',
     'Decree',
     'DuplicateConfigfile',
     'File',
