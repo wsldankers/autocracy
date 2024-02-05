@@ -5,6 +5,7 @@ from subprocess import run
 from inspect import currentframe
 from typing import Callable, Mapping, Iterable, Optional, Any
 from abc import ABC, abstractmethod
+from asyncio import gather
 
 from .utils import *
 
@@ -31,7 +32,6 @@ class Subject:
 
 
 class Decree:
-    _required_resources = ()
     only_if = True
     name = ""
     _needs_update = True
@@ -54,6 +54,9 @@ class Decree:
     def __set_name__(self, objtype, name):
         if not self.name:
             self.name = name
+
+    def _provision(self, repository: BaseRepository):
+        pass
 
     @fallback
     def applied(self):
@@ -107,33 +110,9 @@ class Group(Initializer, Decree):
     def decrees(self) -> dict[str, Decree]:
         raise RuntimeError(f"{self}: not initialized yet (did you forget a lambda?)")
 
-    @property
-    def _required_resources(self):
-        return {
-            resource
-            for decree in self.decrees.values()
-            for resource in decree._required_resources
-        }
-
-    @property
-    def _provided_resources(self):
-        try:
-            return self.__dict__['_provided_resources']
-        except KeyError:
-            raise AttributeError('_provided_resources')
-
-    @_provided_resources.setter
-    def _provided_resources(self, value):
-        self.__dict__['_provided_resources'] = value
+    def _provision(self, repository: BaseRepository):
         for decree in self.decrees.values():
-            decree._provided_resources = value
-
-    @_provided_resources.deleter
-    def _provided_resources(self, value):
-        try:
-            del self.__dict__['_provided_resources']
-        except KeyError:
-            raise AttributeError('_provided_resources')
+            decree._provision(repository)
 
     @initializer
     def _members_that_need_update(self):
@@ -194,10 +173,12 @@ class Run(Initializer, Decree):
 
 
 class File(Initializer, Decree):
-    @property
-    def _required_resources(self):
+    _file_contents: Optional[bytes] = None
+
+    def _provision(self, repository: BaseRepository):
         source = self.source
-        return [source] if source else []
+        if source is not None:
+            self._file_contents = repository.get_file(source)
 
     @property
     def contents(self):
@@ -205,10 +186,9 @@ class File(Initializer, Decree):
 
     @contents.setter
     def contents(self, value):
-        attrs = self.__dict__
-        if 'source' in attrs:
+        if self.source is not None:
             raise RuntimeError(f"must set either contents or source, not both")
-        attrs['contents'] = value
+        self.__dict__['contents'] = value
 
     content = contents
 
@@ -218,16 +198,15 @@ class File(Initializer, Decree):
 
     @source.setter
     def source(self, value):
-        attrs = self.__dict__
-        if 'contents' in attrs:
+        if self.contents is not None:
             raise RuntimeError(f"must set either contents or source, not both")
-        attrs['source'] = value
+        self.__dict__['source'] = value
 
     @initializer
     def _computed_contents(self):
         contents = self.contents
         if contents is None:
-            contents = self._provided_resources[self.source]
+            contents = self._file_contents
         if isinstance(contents, str):
             contents = contents.encode('UTF-8')
         return contents

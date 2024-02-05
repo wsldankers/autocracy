@@ -7,7 +7,10 @@ from psutil import (
 )
 from ipaddress import ip_address, ip_network
 from decimal import Decimal
-
+from collections import defaultdict
+from socket import gethostname, getaddrinfo, AI_CANONNAME, AF_INET, AF_INET6, AF_PACKET
+from sys import platform
+from os import uname
 
 def get_interfaces(facts):
     interfaces = {}

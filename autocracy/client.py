@@ -1,11 +1,9 @@
 import asyncio
 import aiohttp.web
-from os import umask, uname
-from sys import stderr, platform
+from os import umask
 from pathlib import Path
 from ssl import create_default_context, Purpose, TLSVersion
-from socket import gethostname, getaddrinfo, AI_CANONNAME, AF_INET, AF_INET6, AF_PACKET
-from collections import defaultdict, deque
+from collections import deque
 from json import dumps
 from typing import Optional, Iterable
 
@@ -50,7 +48,7 @@ class Client(Initializer):
         )
 
     @initializer
-    def files(self):
+    def files(self) -> dict[Path, bytes]:
         return {}
 
     @initializer
@@ -58,13 +56,11 @@ class Client(Initializer):
         return deque()
 
     async def apply(self, name):
-        files = self.files
+        repository = Repository(files=self.files)
 
-        def get_file(filename):
-            return files[filename]
-
-        decree = loadconfig(name, get_file, facts=Object(self.facts))
-        decree._provided_resources = files
+        facts = Object(self.facts)
+        decree = loadconfig(name, repository.get_file, facts=facts)
+        decree._provision(repository)
         await asyncio.to_thread(decree._apply)
 
     async def accept_files(self, *filenames):
@@ -103,7 +99,7 @@ class Client(Initializer):
         try:
             async for blob in self.rpc:
                 filename = pending_files.popleft()
-                files[filename] = blob
+                files[Path(filename)] = blob
                 warn(f"client got data for file {filename!r}")
         finally:
             fact_collector_task.cancel()

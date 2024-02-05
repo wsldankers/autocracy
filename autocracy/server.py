@@ -153,7 +153,7 @@ class Client(BaseClient):
 
         facts = Object(self.facts or {})
         decree = loadconfig(name, repository.get_file, facts=facts)
-        # decree.provision(repository)
+        decree._provision(repository)
 
         rpc = self.rpc
 
@@ -166,7 +166,7 @@ class Client(BaseClient):
                 'discard_files', *sorted(stale_config_files), rsvp=False
             )
 
-        new_content: dict[str, bytes] = {
+        new_content = {
             file: content
             for file, (content, st) in repository_files.items()
             if remotely_known_files.get(file) != st
