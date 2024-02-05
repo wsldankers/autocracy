@@ -25,13 +25,13 @@ class Repository(BaseRepository):
     def get_file(self, path: str | Path) -> bytes:
         return self.files[normalize_path(path)]
 
-    def get_files(self, path: str | Path) -> Iterable[bytes]:
+    def get_files(self, path: str | Path) -> dict[str, bytes]:
         normalized_path = normalize_path(path)
-        return (
-            value
+        return {
+            str(key): value
             for key, value in self.files.items()
             if key.is_relative_to(normalized_path)
-        )
+        }
 
 
 class Client(Initializer):

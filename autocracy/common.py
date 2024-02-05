@@ -6,6 +6,8 @@ from inspect import currentframe
 from typing import Callable, Mapping, Iterable, Optional, Any
 from abc import ABC, abstractmethod
 from asyncio import gather
+from types import MappingProxyType
+from os import mkdir
 
 from .utils import *
 
@@ -22,7 +24,7 @@ class BaseRepository(ABC, Initializer):
         pass
 
     @abstractmethod
-    def get_files(self, path: str | Path) -> Iterable[bytes]:
+    def get_files(self, path: str | Path) -> dict[str, bytes]:
         pass
 
 
@@ -117,7 +119,9 @@ class Group(Initializer, Decree):
     @initializer
     def _members_that_need_update(self):
         return frozenset(
-            name for name, decree in self.decrees.items() if decree._needs_update
+            name
+            for name, decree in self.decrees.items()
+            if decree._should_run and decree._needs_update
         )
 
     @property
@@ -226,6 +230,72 @@ class File(Initializer, Decree):
         put_file(self._computed_contents, self.filename, 'wb')
 
 
+class RecursiveFiles(Initializer, Decree):
+    _files: Mapping[str, bytes] = MappingProxyType({})
+
+    def _provision(self, repository: BaseRepository):
+        source = self.source
+        if source is not None:
+            self._files = repository.get_files(source).copy()
+
+    @property
+    def source(self) -> Optional[str | Path]:
+        return self.__dict__.get('source', None)
+
+    @source.setter
+    def source(self, value: str | Path):
+        self.__dict__['source'] = str(value)
+
+    @initializer
+    def _existing_parents(self):
+        return {Path(self.destination).parent}
+
+    @property
+    def _needs_update(self):
+        source = Path(self.source)
+        destination = Path(self.destination)
+        files = self._files
+        existing_parents = self._existing_parents
+        for filename, contents in list(files.items()):
+            full_path = destination / Path(filename).relative_to(source)
+            try:
+                old_contents = get_file(full_path, 'rb')
+            except FileNotFoundError:
+                continue
+            self._existing_parents.update(full_path.parents)
+            if old_contents != contents:
+                continue
+            del files[filename]
+
+        return bool(files)
+
+    def _update(self):
+        print(f"{self.name}: running")
+
+        source = Path(self.source)
+        destination = Path(self.destination)
+        existing_parents = self._existing_parents
+        for filename, contents in self._files.items():
+            full_path = destination / Path(filename).relative_to(source)
+            print(f"updating {full_path}")
+            try:
+                put_file(contents, full_path, 'wb')
+            except FileNotFoundError:
+                parent = full_path.parent
+                create = []
+                for parent in full_path.parents:
+                    if parent in existing_parents:
+                        break
+                    create.append(parent)
+                for parent in reversed(create):
+                    try:
+                        mkdir(parent)
+                    except FileExistsError:
+                        pass
+                existing_parents.update(create)
+                put_file(contents, full_path, 'wb')
+
+
 _builtins = vars(builtins_module)
 
 
@@ -291,6 +361,7 @@ __all__ = (
     'Decree',
     'DuplicateConfigfile',
     'File',
+    'RecursiveFiles',
     'Group',
     'Run',
     'Subject',

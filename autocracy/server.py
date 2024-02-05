@@ -58,10 +58,11 @@ class Repository(BaseRepository):
         files[normalized_path] = (content, st)
         return content
 
-    def get_files(self, path: str | Path) -> Iterable[bytes]:
+    def get_files(self, path: str | Path) -> dict[str, bytes]:
         normalized_path = str(normalize_path(path))
         root = self.root
         files = self.files
+        result: dict[str, bytes] = {}
         for parent, _, file_entries, dir_fd in fwalk(
             root / normalized_path,
             onerror=throw,
@@ -83,7 +84,9 @@ class Repository(BaseRepository):
                             continue
                         content = fh.read()
                     files[file_path] = (content, st)
-                yield content
+                result[file_path] = content
+
+        return result
 
 
 class BaseClient(Initializer):
