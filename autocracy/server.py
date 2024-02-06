@@ -23,7 +23,7 @@ from traceback import print_exc
 from struct import Struct
 from socket import SOL_SOCKET, SO_PEERCRED
 from pwd import getpwuid
-from weakref import WeakValueDictionary
+from weakref import WeakValueDictionary, ref as weakref
 from stat import S_ISREG
 from pwd import getpwnam
 
@@ -36,6 +36,7 @@ from .common import (
     BaseRepository,
     Subject,
 )
+from .aiohttp import TCPSite, UnixSite
 
 
 web = aiohttp.web
@@ -224,6 +225,7 @@ class Client(BaseClient):
 class Server(Initializer):
     clients: dict[str, Client] = {}
     config: Object
+    sites: Iterable[web.BaseSite]
 
     @initializer
     def base_dir(self) -> Path:
@@ -299,7 +301,7 @@ class Server(Initializer):
     def done(self):
         return asyncio.get_running_loop().create_future()
 
-    async def __call__(self):
+    async def start(self):
         base_dir = self.base_dir
         pki_dir = base_dir / 'pki'
 
@@ -311,29 +313,46 @@ class Server(Initializer):
         tls.load_cert_chain(base_dir / 'server.crt', base_dir / 'server.key')
         tls.verify_mode = CERT_REQUIRED
 
+        weakself = weakref(self)
+
+        async def client(request):
+            self = weakself()
+            if self is None:
+                return web.Response(status=500)
+            else:
+                return await self.client(request)
+
         app = web.Application()
-        app.add_routes([web.get('/', self.client)])
+        app.add_routes([web.get('/', client)])
         runner = web.AppRunner(app)
         await runner.setup()
 
         sites = [
-            web.UnixSite(runner, self.control_socket_path),
-            web.TCPSite(runner, port=self.port, ssl_context=tls),
+            UnixSite(runner, self.control_socket_path),
+            TCPSite(runner, port=self.port, ssl_context=tls, reuse_port=True),
         ]
 
-        for site in sites:
-            await site.start()
+        await asyncio.gather(*(site.start() for site in sites))
+
+        self.sites = sites
+
+    async def __call__(self):
+        sites = self.sites
+
+        await asyncio.gather(*(site.start_serving() for site in sites))
 
         await self.done
 
-        for site in sites:
-            await site.stop()
+        asyncio.gather(*(site.stop() for site in sites))
 
 
 async def main(procname, config_file, *args, **env):
     setswitchinterval(1)
 
     config = load_config(config_file)
+    server = Server(config=config)
+
+    await server.start()
 
     user = config.get('user')
     if user is not None:
@@ -356,5 +375,4 @@ async def main(procname, config_file, *args, **env):
                 )
             )
 
-    server = Server(config=config)
     await server()

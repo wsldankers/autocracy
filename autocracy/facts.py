@@ -12,6 +12,7 @@ from socket import gethostname, getaddrinfo, AI_CANONNAME, AF_INET, AF_INET6, AF
 from sys import platform
 from os import uname
 
+
 def get_interfaces(facts):
     interfaces = {}
 
@@ -124,5 +125,6 @@ def get_facts():
         # except Exception as e:
         #     print(str(e), file=stderr, flush=True)
     return facts
+
 
 __all__ = ('get_facts',)
