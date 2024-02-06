@@ -303,12 +303,13 @@ class DuplicateConfigfile(BaseException):
     pass
 
 
-def loadconfig(
+def load_decree(
     subject: str | Path,
     get_file: Callable[[str | Path], bytes],
     **context,
 ) -> Decree:
     extra_builtins = _builtins.copy()
+    extra_builtins['subject'] = Subject(subject)
     globals: dict[str, Any] = subdict(
         __builtins__=extra_builtins,
         __file__=None,
@@ -319,6 +320,7 @@ def loadconfig(
     seen = set()
 
     def load(path, ignore_duplicate):
+        globals = weak_globals()
         filename = f"{normalize_path(path)}.py"
         if filename in seen:
             if ignore_duplicate:
@@ -332,7 +334,7 @@ def loadconfig(
         try:
             globals['__file__'] = str(filename)
             code = compile(content, loadfilename(filename), 'exec')
-            exec(code, weak_globals())
+            exec(code, globals)
         finally:
             globals['__file__'] = old_file
 
@@ -346,14 +348,41 @@ def loadconfig(
 
     extra_builtins['require'] = require
 
-    extra_builtins['subject'] = Subject(subject)
-
     include(subject)
 
     decree = Group(**_extract_decrees(globals))
     decree._finalize('_root')
 
     return decree
+
+
+def load_config(filename: str | Path, **context) -> dict[str, Any]:
+    extra_builtins = _builtins.copy()
+    globals: dict[str, Any] = subdict(
+        __builtins__=extra_builtins,
+        __file__=None,
+    )
+    globals.update(context)
+    weak_globals = weakref(globals)
+
+    def include(filename):
+        globals = weak_globals()
+        content = get_file(filename)
+
+        old_file = globals['__file__']
+        new_file = str(Path(old_file or '.').parent / filename)
+        try:
+            globals['__file__'] = new_file
+            code = compile(content, new_file, 'exec')
+            exec(code, globals)
+        finally:
+            globals['__file__'] = old_file
+
+    extra_builtins['include'] = include
+
+    include(filename)
+
+    return {name: value for name, value in globals.items() if not name.startswith('_')}
 
 
 __all__ = (
@@ -365,6 +394,7 @@ __all__ = (
     'Group',
     'Run',
     'Subject',
-    'loadconfig',
+    'load_decree',
+    'load_config',
     'loadfilename',
 )

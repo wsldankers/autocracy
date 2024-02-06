@@ -9,8 +9,13 @@ from os import (
     open as os_open,
     close as os_close,
     stat_result,
+    getuid,
+    initgroups,
+    setresgid,
+    setresuid,
+    environ,
 )
-from sys import stderr
+from sys import stderr, argv, setswitchinterval
 from pathlib import Path
 from ssl import create_default_context, Purpose, TLSVersion, CERT_REQUIRED
 from json import loads
@@ -20,10 +25,17 @@ from socket import SOL_SOCKET, SO_PEERCRED
 from pwd import getpwuid
 from weakref import WeakValueDictionary
 from stat import S_ISREG
+from pwd import getpwnam
 
 from .rpc import RPC
 from .utils import *
-from .common import loadconfig, DuplicateConfigfile, BaseRepository
+from .common import (
+    load_config,
+    load_decree,
+    DuplicateConfigfile,
+    BaseRepository,
+    Subject,
+)
 
 
 web = aiohttp.web
@@ -131,7 +143,15 @@ class Admin(BaseClient):
 class Client(BaseClient):
     facts: Optional[dict] = None
     name: str
-    confpath: Path | str
+    config: Object
+
+    @initializer
+    def base_dir(self) -> Path:
+        return Path(self.config['base_dir'])
+
+    @initializer
+    def repository_root(self) -> Path:
+        return Path(self.config.get('repository_root', self.base_dir))
 
     @weakproperty
     def rpc(self) -> RPC:
@@ -152,10 +172,11 @@ class Client(BaseClient):
         warn("apply()")
         name = self.name
 
-        repository = Repository(root=self.confpath)
+        repository = Repository(root=self.repository_root)
 
         facts = Object(self.facts or {})
-        decree = loadconfig(name, repository.get_file, facts=facts)
+
+        decree = load_decree(name, repository.get_file, facts=facts)
         decree._provision(repository)
 
         rpc = self.rpc
@@ -202,7 +223,19 @@ class Client(BaseClient):
 
 class Server(Initializer):
     clients: dict[str, Client] = {}
-    confpath: Path
+    config: Object
+
+    @initializer
+    def base_dir(self) -> Path:
+        return Path(self.config['base_dir'])
+
+    @initializer
+    def port(self) -> int:
+        return int(self.config.get('port', 443))
+
+    @initializer
+    def control_socket_path(self) -> str:
+        return str(self.config.get('control_socket_path', self.base_dir / 'control'))
 
     async def fetch(self) -> None:
         async with aiohttp.ClientSession(raise_for_status=True) as session:
@@ -214,7 +247,7 @@ class Server(Initializer):
 
         # socket = request.get_extra_info('ssl_object')
         # cert_binary = socket.getpeercert(True)
-        # from cryptography.x509 load load_der_x509_certificate
+        # from cryptography.x509 import load_der_x509_certificate
         # cert_x509 = load_der_x509_certificate(cert_binary)
 
         peercert = request.get_extra_info('peercert')
@@ -257,7 +290,7 @@ class Server(Initializer):
             ws = web.WebSocketResponse(heartbeat=60, compress=True)
             await ws.prepare(request)
 
-            client = Client(name=commonName, ws=ws, server=self, confpath=self.confpath)
+            client = Client(name=commonName, ws=ws, server=self, config=self.config)
             await client()
 
         return web.Response(status=201)
@@ -266,7 +299,8 @@ class Server(Initializer):
     def done(self):
         return asyncio.get_running_loop().create_future()
 
-    async def __call__(self, base_dir: Path):
+    async def __call__(self):
+        base_dir = self.base_dir
         pki_dir = base_dir / 'pki'
 
         tls = create_default_context(
@@ -283,8 +317,8 @@ class Server(Initializer):
         await runner.setup()
 
         sites = [
-            web.UnixSite(runner, str(base_dir / 'control')),
-            web.TCPSite(runner, port=9999, ssl_context=tls),
+            web.UnixSite(runner, self.control_socket_path),
+            web.TCPSite(runner, port=self.port, ssl_context=tls),
         ]
 
         for site in sites:
@@ -296,6 +330,31 @@ class Server(Initializer):
             await site.stop()
 
 
-async def main(base_dir: Path):
-    server = Server(confpath=base_dir)
-    await server(base_dir)
+async def main(procname, config_file, *args, **env):
+    setswitchinterval(1)
+
+    config = load_config(config_file)
+
+    user = config.get('user')
+    if user is not None:
+        pw = getpwnam(user)
+        uid = pw.pw_uid
+        if uid != getuid():
+            name = pw.pw_name
+            gid = pw.pw_gid
+
+            initgroups(name, gid)
+            setresgid(gid, gid, gid)
+            setresuid(uid, uid, uid)
+
+            environ.update(
+                dict(
+                    USER=name,
+                    LOGNAME=name,
+                    HOME=pw.pw_dir,
+                    SHELL=pw.pw_shell,
+                )
+            )
+
+    server = Server(config=config)
+    await server()

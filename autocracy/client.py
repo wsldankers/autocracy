@@ -5,18 +5,15 @@ from pathlib import Path
 from ssl import create_default_context, Purpose, TLSVersion
 from collections import deque
 from json import dumps
-from typing import Optional, Iterable
+from typing import Optional, Iterable, Any
+from sys import argv, setswitchinterval
 
-from .common import loadconfig, BaseRepository
+from .common import load_config, load_decree, BaseRepository, Subject
 from .rpc import RPC, immediate
 from .facts import get_facts
 from .utils import *
 
 web = aiohttp.web
-
-
-max_connect_interval = 1
-max_facts_interval = 30
 
 
 class Repository(BaseRepository):
@@ -37,6 +34,7 @@ class Repository(BaseRepository):
 class Client(Initializer):
     ws: web.WebSocketResponse
     facts: Optional[dict]
+    config: dict[str, Any]
 
     @weakproperty
     def rpc(self):
@@ -55,11 +53,15 @@ class Client(Initializer):
     def pending_files(self):
         return deque()
 
+    @initializer
+    def max_facts_interval(self):
+        return self.config.get('max_facts_interval', 60)
+
     async def apply(self, name):
         repository = Repository(files=self.files)
 
         facts = Object(self.facts)
-        decree = loadconfig(name, repository.get_file, facts=facts)
+        decree = load_decree(name, repository.get_file, facts=facts)
         decree._provision(repository)
         await asyncio.to_thread(decree._apply)
 
@@ -74,6 +76,7 @@ class Client(Initializer):
     async def fact_collector(self):
         previous_facts = object()
         facts_sleep = 0
+        max_facts_interval = self.max_facts_interval
         while True:
             # warn("getting facts")
             try:
@@ -109,13 +112,24 @@ class Client(Initializer):
                 pass
 
 
-async def main(base_dir):
+async def main(procname, config_file, *args, **env):
+    setswitchinterval(1)
     umask(0o027)
 
-    tls = create_default_context(Purpose.SERVER_AUTH, cafile=base_dir / 'server.crt')
+    config = load_config(config_file)
+    base_dir = Path(config['base_dir'])
+
+    server_crt = config.get('cafile', base_dir / 'server.crt')
+    client_crt = config.get('certfile', base_dir / 'client.crt')
+    client_key = config.get('keyfile', base_dir / 'client.key')
+
+    tls = create_default_context(Purpose.SERVER_AUTH, cafile=server_crt)
     if tls.minimum_version < TLSVersion.TLSv1_3:
         tls.minimum_version = TLSVersion.TLSv1_3
-    tls.load_cert_chain(base_dir / 'client.crt', base_dir / 'client.key')
+    tls.load_cert_chain(client_crt, client_key)
+
+    server = config.get('server', 'https://localhost')
+    max_connect_interval = config.get('max_connect_interval', 60)
 
     async with aiohttp.ClientSession(raise_for_status=True) as session:
         connect_sleep = 0
@@ -123,13 +137,9 @@ async def main(base_dir):
 
         while True:
             try:
-                async with session.ws_connect(
-                    'https://localhost:9999',
-                    compress=11,
-                    ssl=tls,
-                ) as ws:
+                async with session.ws_connect(server, compress=11, ssl=tls) as ws:
                     connect_errors.clear()
-                    client = Client(ws=ws)
+                    client = Client(config=config, ws=ws)
                     await client()
 
             except aiohttp.client_exceptions.ClientConnectorError as e:
