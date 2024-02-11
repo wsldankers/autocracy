@@ -3,11 +3,21 @@ import builtins as builtins_module
 from weakref import ref as weakref
 from subprocess import run
 from inspect import currentframe
-from typing import Callable, Mapping, Iterable, Optional, Any
+from typing import (
+    Callable,
+    MutableMapping,
+    Iterable,
+    Optional,
+    Any,
+    TYPE_CHECKING,
+    cast,
+)
+from collections.abc import Collection, Sequence, Set
 from abc import ABC, abstractmethod
 from asyncio import gather
 from types import MappingProxyType
 from os import mkdir
+from subprocess import run, DEVNULL
 
 from .utils import *
 
@@ -36,7 +46,15 @@ class Subject:
 class Decree:
     only_if = True
     name = ""
-    _needs_update = True
+
+    if TYPE_CHECKING:
+
+        @property
+        def _needs_update(self) -> bool:
+            return True
+
+    else:
+        _needs_update = True
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -231,7 +249,8 @@ class File(Initializer, Decree):
 
 
 class RecursiveFiles(Initializer, Decree):
-    _files: Mapping[str, bytes] = MappingProxyType({})
+    _files: MutableMapping[str, bytes] = cast(MutableMapping, MappingProxyType({}))
+    destination: Path | str
 
     def _provision(self, repository: BaseRepository):
         source = self.source
@@ -239,7 +258,7 @@ class RecursiveFiles(Initializer, Decree):
             self._files = repository.get_files(source).copy()
 
     @property
-    def source(self) -> Optional[str | Path]:
+    def source(self) -> str | Path:
         return self.__dict__.get('source', None)
 
     @source.setter
@@ -247,11 +266,11 @@ class RecursiveFiles(Initializer, Decree):
         self.__dict__['source'] = str(value)
 
     @initializer
-    def _existing_parents(self):
+    def _existing_parents(self) -> set[Path]:
         return {Path(self.destination).parent}
 
     @property
-    def _needs_update(self):
+    def _needs_update(self) -> bool:
         source = Path(self.source)
         destination = Path(self.destination)
         files = self._files
@@ -269,7 +288,7 @@ class RecursiveFiles(Initializer, Decree):
 
         return bool(files)
 
-    def _update(self):
+    def _update(self) -> None:
         print(f"{self.name}: running")
 
         source = Path(self.source)
@@ -294,6 +313,129 @@ class RecursiveFiles(Initializer, Decree):
                         pass
                 existing_parents.update(create)
                 put_file(contents, full_path, 'wb')
+
+
+class Package(Initializer, Decree):
+    install: Collection[str] = ()
+    remove: Collection[str] = ()
+    _install: Set[str]
+    _remove: Set[str]
+    purge: Optional[bool] = None
+    recommends: Optional[bool] = None
+    # quick = False
+    gentle = False
+
+    @property
+    def _needs_update(self) -> bool:
+        result = run(
+            ['dpkg', '--print-architecture'],
+            capture_output=True,
+            text=True,
+            check=True,
+            stdin=DEVNULL,
+        )
+
+        (native_arch,) = result.stdout.splitlines()
+        default_archs = frozenset((native_arch, 'all'))
+
+        result = run(
+            [
+                'dpkg-query',
+                '-f',
+                '${Package} ${Architecture} ${Version} ${Status} ${Essential}\n',
+                '-W',
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            stdin=DEVNULL,
+        )
+
+        installed: set[str] = set()
+
+        for line in result.stdout.splitlines():
+            name, arch, version, want, error, status, essential = line.split()
+            if error != 'ok':
+                raise RuntimeError(f"package {name}:{arch} is in error state {error}")
+            if status == 'installed':
+                installed.add(f"{name}:{arch}")
+                if arch in default_archs:
+                    installed.add(name)
+            else:
+                warn(status)
+
+        install = frozenset(self.install) - installed
+        remove = frozenset(self.remove) & installed
+
+        self._install = install
+        self._remove = remove
+
+        warn('hello =', repr('hello' in installed))
+        warn('install =', *install)
+        warn('remove =', *remove)
+
+        return bool(install or remove)
+
+    def _update(self) -> None:
+
+        install = self._install
+        remove = self._remove
+
+        apt_get_options: set[str] = {'-qy'}
+        if remove:
+            if self.purge:
+                apt_get_options.add('--purge')
+            elif self.purge is not None:
+                apt_get_options.add('--no-purge')
+
+        if self.recommends:
+            apt_get_options.add('--install-recommends',)
+        elif self.recommends is not None:
+            apt_get_options.add('--no-install-recommends',)
+
+        if self.gentle:
+            if remove:
+                run(
+                    [
+                        'echo',
+                        'apt-mark',
+                        'auto',
+                        *remove,
+                    ],
+                    # capture_output=True,
+                    text=True,
+                    check=True,
+                    stdin=DEVNULL,
+                )
+            run(
+                [
+                    'echo',
+                    'apt-get',
+                    *apt_get_options,
+                    *(('--auto-remove',) if remove else ()),
+                    'install',
+                    *install,
+                ],
+                # capture_output=True,
+                text=True,
+                check=True,
+                stdin=DEVNULL,
+            )
+        else:
+            run(
+                [
+                    'echo',
+                    'apt-get',
+                    *apt_get_options,
+                    'install',
+                    *install,
+                    *(f"{package}-" for package in remove),
+                ],
+                # capture_output=True,
+                text=True,
+                check=True,
+                stdin=DEVNULL,
+            )
 
 
 _builtins = vars(builtins_module)
@@ -326,7 +468,7 @@ def load_decree(
             if ignore_duplicate:
                 return
             else:
-                raise RuntimeError(f"{path} already included")
+                raise DuplicateConfigfile(f"{path} already included")
         seen.add(filename)
         content = get_file(filename)
 
@@ -393,6 +535,7 @@ __all__ = (
     'RecursiveFiles',
     'Group',
     'Run',
+    'Package',
     'Subject',
     'load_decree',
     'load_config',

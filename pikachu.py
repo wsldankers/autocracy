@@ -1,5 +1,5 @@
 from json import dumps
-from autocracy.common import File, Run, Group, RecursiveFiles
+from autocracy.common import File, Run, Group, RecursiveFiles, Package
 from typing import Any
 
 facts: Any
@@ -28,6 +28,13 @@ gitignore = File(
 bin = RecursiveFiles(
     source='bin',
     destination='/tmp/recursive',
+)
+
+hello = Package(
+    install={'hello'},
+    gentle=True,
+    purge=True,
+    recommends=False,
 )
 
 grp = Group(

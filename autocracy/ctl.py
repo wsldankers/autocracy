@@ -6,7 +6,7 @@ from .common import warn
 from .rpc import RPC
 
 
-async def main():
+async def main(procname, *args, **env):
     async with aiohttp.ClientSession(
         raise_for_status=True,
         connector=aiohttp.UnixConnector(path='control'),
@@ -15,7 +15,7 @@ async def main():
             rpc = RPC(ws)
 
             async def run_command():
-                for x in await rpc.remote_command(*argv[1:]):
+                for x in await rpc.remote_command(*args):
                     print(x)
 
             async def rpc_loop():
@@ -26,7 +26,8 @@ async def main():
             rpc_task = asyncio.create_task(rpc_loop())
 
             done, pending = await asyncio.wait(
-                [run_task, rpc_task], return_when=asyncio.FIRST_COMPLETED
+                [run_task, rpc_task],
+                return_when=asyncio.FIRST_COMPLETED,
             )
 
         for task in pending:
