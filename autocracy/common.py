@@ -342,7 +342,7 @@ class Package(Initializer, Decree):
             [
                 'dpkg-query',
                 '-f',
-                '${Package} ${Architecture} ${Version} ${Status} ${Essential}\n',
+                r'${Package} ${Architecture} ${Version} ${Status} ${Essential}\n',
                 '-W',
             ],
             capture_output=True,
@@ -361,8 +361,10 @@ class Package(Initializer, Decree):
                 installed.add(f"{name}:{arch}")
                 if arch in default_archs:
                     installed.add(name)
-            else:
-                warn(status)
+            elif status != 'config-files':
+                raise RuntimeError(
+                    f"package {name}:{arch} has unknown status '{status}'"
+                )
 
         install = frozenset(self.install) - installed
         remove = frozenset(self.remove) & installed
@@ -370,14 +372,9 @@ class Package(Initializer, Decree):
         self._install = install
         self._remove = remove
 
-        warn('hello =', repr('hello' in installed))
-        warn('install =', *install)
-        warn('remove =', *remove)
-
         return bool(install or remove)
 
     def _update(self) -> None:
-
         install = self._install
         remove = self._remove
 
@@ -389,34 +386,23 @@ class Package(Initializer, Decree):
                 apt_get_options.add('--no-purge')
 
         if self.recommends:
-            apt_get_options.add('--install-recommends',)
+            apt_get_options.add('--install-recommends')
         elif self.recommends is not None:
-            apt_get_options.add('--no-install-recommends',)
+            apt_get_options.add('--no-install-recommends')
 
         if self.gentle:
             if remove:
                 run(
-                    [
-                        'echo',
-                        'apt-mark',
-                        'auto',
-                        *remove,
-                    ],
-                    # capture_output=True,
+                    ['apt-mark', 'auto', *remove],
+                    capture_output=True,
                     text=True,
                     check=True,
                     stdin=DEVNULL,
                 )
+                apt_get_options.add('--auto-remove')
             run(
-                [
-                    'echo',
-                    'apt-get',
-                    *apt_get_options,
-                    *(('--auto-remove',) if remove else ()),
-                    'install',
-                    *install,
-                ],
-                # capture_output=True,
+                ['apt-get', *apt_get_options, 'install', *install],
+                capture_output=True,
                 text=True,
                 check=True,
                 stdin=DEVNULL,
@@ -424,14 +410,13 @@ class Package(Initializer, Decree):
         else:
             run(
                 [
-                    'echo',
                     'apt-get',
                     *apt_get_options,
                     'install',
                     *install,
                     *(f"{package}-" for package in remove),
                 ],
-                # capture_output=True,
+                capture_output=True,
                 text=True,
                 check=True,
                 stdin=DEVNULL,
