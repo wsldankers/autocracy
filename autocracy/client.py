@@ -7,6 +7,7 @@ from collections import deque
 from json import dumps
 from typing import Optional, Iterable, Any
 from sys import argv, setswitchinterval
+from traceback import print_exc
 
 from .common import load_config, load_decree, BaseRepository, Subject
 from .rpc import RPC, immediate
@@ -33,11 +34,11 @@ class Repository(BaseRepository):
 
 class Client(Initializer):
     ws: web.WebSocketResponse
-    facts: Optional[dict]
+    facts: Optional[dict] = None
     config: dict[str, Any]
 
     @weakproperty
-    def rpc(self):
+    def rpc(self) -> RPC:
         return RPC(
             self.ws,
             apply=self.apply,
@@ -50,30 +51,33 @@ class Client(Initializer):
         return {}
 
     @initializer
-    def pending_files(self):
+    def pending_files(self) -> deque:
         return deque()
 
     @initializer
-    def max_facts_interval(self):
+    def max_facts_interval(self) -> int:
         return self.config.get('max_facts_interval', 60)
 
-    async def apply(self, name):
+    async def apply(self, name) -> None:
         repository = Repository(files=self.files)
 
-        facts = Object(self.facts)
+        facts = Object(self.facts or {})
         decree = load_decree(name, repository.get_file, facts=facts)
         decree._provision(repository)
-        await asyncio.to_thread(decree._apply)
+        try:
+            await asyncio.to_thread(decree._apply)
+        except Exception:
+            print_exc()
 
-    async def accept_files(self, *filenames):
+    async def accept_files(self, *filenames) -> None:
         self.pending_files.extend(filenames)
 
-    async def discard_files(self, *filenames):
+    async def discard_files(self, *filenames) -> None:
         files = self.files
         for filename in filenames:
             del files[filename]
 
-    async def fact_collector(self):
+    async def fact_collector(self) -> None:
         previous_facts = object()
         facts_sleep = 0
         max_facts_interval = self.max_facts_interval
@@ -95,7 +99,7 @@ class Client(Initializer):
             facts_sleep = min(facts_sleep + 1, max_facts_interval)
             await asyncio.sleep(facts_sleep)
 
-    async def __call__(self):
+    async def __call__(self) -> None:
         files = self.files
         fact_collector_task = asyncio.create_task(self.fact_collector())
         pending_files = self.pending_files

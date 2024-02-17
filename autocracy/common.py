@@ -86,27 +86,37 @@ class Decree:
     def updated(self):
         raise RuntimeError(f"{self}: not initialized yet (did you forget a lambda?)")
 
+    @fallback
+    def activated(self):
+        raise RuntimeError(f"{self}: not initialized yet (did you forget a lambda?)")
+
     @property
-    def _should_run(self):
+    def _should_activate(self):
         return call_if_callable(self.only_if)
 
     def _apply(self):
         if self.applied:
             raise RuntimeError(f"{self}: refused attempt to run twice")
-        if self._should_run:
-            if self._needs_update:
-                self._update()
-                self.updated = True
-            self.applied = True
+        if self._needs_update:
+            self._update()
+            self.updated = True
+        if self._should_activate:
+            self._activate()
+            self.activated = True
+        self.applied = True
 
     def _update(self):
-        raise RuntimeError(f"{self}: update() not implemented")
+        pass
+
+    def _activate(self):
+        pass
 
     def _finalize(self, name: Optional[str] = None):
         if name and not self.name:
             self.name = name
         self.applied = False
         self.updated = False
+        self.activated = False
 
     def __str__(self):
         name = self.name
@@ -179,7 +189,7 @@ class Run(Initializer, Decree):
     def command(self):
         raise RuntimeError(f"{self.name}: no command configured")
 
-    def _update(self):
+    def _activate(self):
         command = self.command
         try:
             command = (
@@ -421,6 +431,77 @@ class Package(Initializer, Decree):
                 check=True,
                 stdin=DEVNULL,
             )
+
+
+class Service(Initializer, Decree):
+    reload: Optional[bool] = None
+    enable: Optional[bool] = None
+    active: Optional[bool] = None
+    _change_enable: Optional[bool] = None
+    _change_active: Optional[bool] = None
+    unit: str
+
+    @property
+    def _needs_update(self) -> bool:
+        enable = self.enable
+        if enable is not None:
+            result = run(
+                ['systemctl', 'is-enabled', self.unit],
+                capture_output=True,
+                text=True,
+                check=True,
+                stdin=DEVNULL,
+            )
+            enable = bool(self.enable)
+            if (result.stdout.strip() == 'enabled') != enable:
+                self._change_enable = enable
+
+        active = self.active
+        if active is not None:
+            command = ['systemctl', 'is-active', '--quiet', self.unit]
+            result = run(
+                command,
+                capture_output=True,
+                text=True,
+                stdin=DEVNULL,
+            )
+            returncode = result.returncode
+            if returncode == 0:
+                if not active:
+                    self._change_active = False
+            elif returncode == 3:
+                if active:
+                    self._change_active = True
+            else:
+                raise RuntimeError(
+                    f"command '{' '.join(command)}' returned non-zero exit status {returncode}:\n{result.stderr}"
+                )
+
+        return self._change_enable or self._change_active
+
+    def _update(self) -> None:
+        change_enable = self._change_enable
+        change_active = self._change_active
+        command = ['systemctl']
+        if change_enable is not None:
+            if change_enable:
+                command.append('enable')
+                if change_active:
+                    command.append('--now')
+            else:
+                command.append('disable')
+                if change_active is not None and not change_active:
+                    command.append('--now')
+        elif change_active is not None:
+            if change_active:
+                command.append('start')
+            else:
+                command.append('stop')
+        else:
+            return
+
+        command.append(self.unit)
+        run(command, text=True, check=True, stdin=DEVNULL)
 
 
 _builtins = vars(builtins_module)
