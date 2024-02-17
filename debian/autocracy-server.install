@@ -1,0 +1,4 @@
+#! /usr/bin/dh-exec
+bin/server.py => /usr/bin/autocracy-server
+bin/ctl.py => /usr/bin/autocracy
+debian/server/* /

@@ -1,0 +1,3 @@
+#! /usr/bin/dh-exec
+bin/client.py => /usr/bin/autocracy-client
+debian/client/* /

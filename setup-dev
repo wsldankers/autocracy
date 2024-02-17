@@ -1,3 +1,5 @@
+#! /usr/bin/make -f
+
 all: server.crt server.key client.crt client.key
 
 clean:

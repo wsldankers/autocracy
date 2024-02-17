@@ -1,0 +1,32 @@
+Source: autocracy
+Section: admin
+Priority: optional
+Maintainer: Wessel Dankers <wsl@fruit.je>
+Build-Depends: debhelper, dh-python, dh-exec, python3-all, python3-setuptools
+X-Python3-Version: >= 3.5
+Standards-Version: 3.9.1
+
+Package: python3-autocracy
+Architecture: all
+Depends: ${misc:Depends}, ${python3:Depends}, python3-aiohttp
+Description: System configuration system (common library)
+ Configures your systems according to your specifications.
+ .
+ This package contains the common python bits.
+
+Package: autocracy-server
+Architecture: all
+Depends: ${misc:Depends}, ${python3:Depends}, python3-autocracy, python3-aiohttp
+Description: System configuration system (server)
+ Configures your systems according to your specifications.
+ .
+ This package contains the central server that the clients contact.
+
+Package: autocracy-client
+Architecture: all
+Depends: ${misc:Depends}, ${python3:Depends}, python3-autocracy, python3-aiohttp
+Description: System configuration system (client)
+ Configures your systems according to your specifications.
+ .
+ This package contains the client you install on systems that
+ you want to manage.
