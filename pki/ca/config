@@ -1,9 +1,9 @@
 oid_section             = extra_oids
 
 [ ca ]
-default_ca              = Fruit
+default_ca              = Autocracy
 
-[ Fruit ]
+[ Autocracy ]
 dir                     = ca
 certs                   = $dir
 new_certs_dir           = $dir/certs
@@ -13,7 +13,7 @@ RANDFILE                = $dir/rand
 certificate             = $dir/certificate
 private_key             = $dir/key
 default_startdate       = 19700101000000Z
-default_enddate         = 20380119031407Z
+default_enddate         = 21000101000000Z
 default_md              = sha512
 preserve                = yes
 unique_subject          = no

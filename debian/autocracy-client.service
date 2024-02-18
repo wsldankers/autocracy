@@ -1,0 +1,14 @@
+[Unit]
+Description=Autocracy client
+ConditionPathExists=/etc/autocracy/client/server.crt
+ConditionPathExists=/etc/autocracy/client/client.crt
+ConditionPathExists=/etc/autocracy/client/client.key
+
+[Service]
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/autocracy-client /etc/autocracy/client.py
+KillMode=mixed
+TimeoutStopSec=2
+
+[Install]
+WantedBy=multi-user.target

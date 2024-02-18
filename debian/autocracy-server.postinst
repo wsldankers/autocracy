@@ -3,9 +3,32 @@
 set -e
 
 case $1 in configure)
+	cfg=/etc/autocracy/server
+	mkdir -p "$cfg"
+
 	if ! getent passwd autocracy >/dev/null 2>&1
 	then
 		useradd --system --shell /sbin/nologin --home /nonexistent --user-group autocracy
+	fi
+
+	make -C "$cfg/pki" -s ca/certificate
+
+	key=$cfg/server.key
+	if [ ! -e "$key" ]
+	then
+		rm -f "$key.new"
+		openssl genpkey -algorithm ED25519 -out "$key.new"
+		chgrp autocracy "$key.new"
+		chmod 640 "$key.new"
+		mv "$key.new" "$key"
+	fi
+
+	crt=$cfg/server.crt
+	if [ ! -e "$crt" ]
+	then
+		rm -f "$crt.new"
+		openssl req -x509 -subj '/CN=autocracy' -days 36524 -sha256 -out "$crt.new" -key "$key" -nodes
+		mv "$crt.new" "$crt"
 	fi
 esac
 

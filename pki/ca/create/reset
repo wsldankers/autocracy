@@ -1,6 +1,6 @@
 #! /bin/sh
 
-set -ex
+set -e
 
 rm -f ca/certs/* ca/serial.old ca/index.old ca/index.attr ca/index.attr.old
 mkdir -p ca/certs

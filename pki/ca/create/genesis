@@ -1,7 +1,6 @@
 #! /bin/sh
 
-set -ex
-umask 077
+set -e
 
 ca/create/reset
 

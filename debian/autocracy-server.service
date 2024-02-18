@@ -1,0 +1,30 @@
+[Unit]
+Description=Autocracy server
+
+[Service]
+Environment=PYTHONDONTWRITEBYTECODE=1
+RuntimeDirectory=autocracy
+ExecStart=/usr/bin/autocracy-server /etc/autocracy/server.py
+KillMode=mixed
+TimeoutStopSec=2
+
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+NoNewPrivileges=yes
+PrivateDevices=yes
+PrivateMounts=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=full
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target

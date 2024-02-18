@@ -16,7 +16,7 @@ Description: System configuration system (common library)
 
 Package: autocracy-server
 Architecture: all
-Depends: ${misc:Depends}, ${python3:Depends}, python3-autocracy, python3-aiohttp
+Depends: ${misc:Depends}, ${python3:Depends}, python3-autocracy, python3-aiohttp, openssl
 Description: System configuration system (server)
  Configures your systems according to your specifications.
  .
