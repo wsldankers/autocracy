@@ -38,11 +38,6 @@ class BaseRepository(ABC, Initializer):
         pass
 
 
-class Subject:
-    def __init__(self, name):
-        self.name = name
-
-
 class Decree:
     only_if = True
     name = ""
@@ -516,19 +511,21 @@ def load_decree(
     get_file: Callable[[str | Path], bytes],
     **context,
 ) -> Decree:
-    extra_builtins = _builtins.copy()
-    extra_builtins['subject'] = Subject(subject)
-    globals: dict[str, Any] = subdict(
+    extra_builtins = {
+        **_builtins,
+        'subject': subject,
+        **context,
+    }
+    variables: dict[str, Any] = subdict(
         __builtins__=extra_builtins,
         __file__=None,
     )
-    extra_builtins.update(context)
-    weak_globals = weakref(globals)
+    weak_variables = weakref(variables)
 
     seen = set()
 
     def load(path, ignore_duplicate):
-        globals = weak_globals()
+        variables = weak_variables()
         filename = f"{normalize_path(path)}.py"
         if filename in seen:
             if ignore_duplicate:
@@ -538,13 +535,13 @@ def load_decree(
         seen.add(filename)
         content = get_file(filename)
 
-        old_file = globals['__file__']
+        old_file = variables['__file__']
         try:
-            globals['__file__'] = str(filename)
+            variables['__file__'] = str(filename)
             code = compile(content, loadfilename(filename), 'exec')
-            exec(code, globals)
+            exec(code, variables)
         finally:
-            globals['__file__'] = old_file
+            variables['__file__'] = old_file
 
     def include(path):
         load(path, False)
@@ -558,7 +555,7 @@ def load_decree(
 
     include(subject)
 
-    decree = Group(**_extract_decrees(globals))
+    decree = Group(**_extract_decrees(variables))
     decree._finalize('_root')
 
     return decree
@@ -566,31 +563,31 @@ def load_decree(
 
 def load_config(filename: str | Path, **context) -> dict[str, Any]:
     extra_builtins = _builtins.copy()
-    globals: dict[str, Any] = subdict(
+    variables: dict[str, Any] = subdict(
         __builtins__=extra_builtins,
         __file__=None,
     )
-    globals.update(context)
-    weak_globals = weakref(globals)
+    variables.update(context)
+    weak_variables = weakref(variables)
 
     def include(filename):
-        globals = weak_globals()
+        variables = weak_variables()
         content = get_file(filename)
 
-        old_file = globals['__file__']
+        old_file = variables['__file__']
         new_file = str(Path(old_file or '.').parent / filename)
         try:
-            globals['__file__'] = new_file
+            variables['__file__'] = new_file
             code = compile(content, new_file, 'exec')
-            exec(code, globals)
+            exec(code, variables)
         finally:
-            globals['__file__'] = old_file
+            variables['__file__'] = old_file
 
     extra_builtins['include'] = include
 
     include(filename)
 
-    return {name: value for name, value in globals.items() if not name.startswith('_')}
+    return {name: value for name, value in variables.items() if not name.startswith('_')}
 
 
 __all__ = (
