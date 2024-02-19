@@ -69,8 +69,7 @@ class RPC(Initializer):
             try:
                 await ws.send_json([name, cid, *args])
 
-                async with asyncio.timeout(timeout):
-                    return await pending_command
+                return await asyncio.wait_for(pending_command, timeout)
             finally:
                 pending_commands.pop(cid, None)
         else:
