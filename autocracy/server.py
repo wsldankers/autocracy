@@ -22,7 +22,7 @@ from json import loads
 from traceback import print_exc
 from struct import Struct
 from socket import SOL_SOCKET, SO_PEERCRED
-from pwd import getpwuid
+from pwd import getpwuid, getpwnam
 from weakref import WeakValueDictionary, ref as weakref
 from stat import S_ISREG
 from pwd import getpwnam
@@ -252,6 +252,13 @@ class Server(Initializer):
         return int(self.config.get('port', 443))
 
     @initializer
+    def admin_users(self) -> frozenset[int]:
+        return frozenset(
+            user if isinstance(user, int) else getpwnam(user).pw_uid
+            for user in self.config.get('admin_users', (geteuid(),))
+        )
+
+    @initializer
     def control_socket_path(self) -> str:
         return str(self.config.get('control_socket_path', self.base_dir / 'control'))
 
@@ -273,7 +280,7 @@ class Server(Initializer):
             socket = request.get_extra_info('socket')
             creds = socket.getsockopt(SOL_SOCKET, SO_PEERCRED, peercred_struct.size)
             pid, uid, gid = peercred_struct.unpack(creds)
-            if pid and uid == geteuid():
+            if pid and uid in self.admin_users:
                 warn(f"admin connected: {getpwuid(uid).pw_name}")
                 ws = web.WebSocketResponse(heartbeat=60, compress=False)
                 await ws.prepare(request)

@@ -1,6 +1,7 @@
 import asyncio
 import aiohttp.web
 from sys import argv
+from os import getenv
 
 from .common import warn
 from .rpc import RPC
@@ -9,7 +10,9 @@ from .rpc import RPC
 async def main(procname, *args, **env):
     async with aiohttp.ClientSession(
         raise_for_status=True,
-        connector=aiohttp.UnixConnector(path='control'),
+        connector=aiohttp.UnixConnector(
+            path=getenv('AUTOCRACY_CONTROL_SOCKET', '/run/autocracy/control'),
+        ),
     ) as session:
         async with session.ws_connect('http://localhost', compress=False) as ws:
             rpc = RPC(ws)
