@@ -27,7 +27,7 @@ def get_interfaces(facts):
                     # to sort this after prefixed addresses:
                     ip = (ip, ip.max_prefixlen + 1)
                 else:
-                    ip = (ip, int(ip_address(netmask)).bit_count())
+                    ip = (ip, int(ip_address(netmask)).bit_length())
                 if family == AF_INET:
                     interface['ipv4'].add(ip)
                 else:
