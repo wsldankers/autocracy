@@ -7,8 +7,6 @@ prompt                  = no
 req_extensions          = req_extensions
 
 [ req_distinguished_name ]
-C                       = NL
-O                       = Fruit
 CN                      = template
 
 [ req_attributes ]
