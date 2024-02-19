@@ -9,7 +9,7 @@ from typing import Optional, Iterable, Any, Union
 from sys import argv, setswitchinterval
 from traceback import print_exc
 
-from .common import load_config, load_policy, BaseRepository, Subject
+from .common import load_config, load_policy, BaseRepository
 from .rpc import RPC, immediate
 from .facts import get_facts
 from .utils import *
