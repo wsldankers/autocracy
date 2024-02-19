@@ -32,6 +32,7 @@ from .utils import *
 from .common import (
     load_config,
     load_policy,
+    load_tags,
     DuplicateConfigfile,
     BaseRepository,
     Subject,
@@ -109,6 +110,10 @@ class BaseClient(Initializer):
     def server(self):
         raise RuntimeError("server property not initialized")
 
+    @initializer
+    def repository_root(self) -> Path:
+        return Path(self.config.get('repository_root', self.base_dir))
+
 
 class Admin(BaseClient):
     @weakproperty
@@ -126,7 +131,23 @@ class Admin(BaseClient):
     async def apply(self, *names):
         clients = self.server.clients
         if names:
-            targets = (clients[name] for name in names)
+            target_names = set()
+            tags = None
+            for name in names:
+                if name.startswith('@'):
+                    if tags is None:
+                        repository = Repository(root=self.repository_root)
+                        tags = load_tags(repository.get_file, 'tags')
+                    try:
+                        tag = tags[name[1:]]
+                    except KeyError:
+                        warn(f"unknown tag {name!r}, skipping")
+                    else:
+                        target_names.update(tag)
+
+            targets = (
+                client for name, client in clients.items() if name in target_names
+            )
         else:
             targets = clients.values()
 
@@ -149,10 +170,6 @@ class Client(BaseClient):
     @initializer
     def base_dir(self) -> Path:
         return Path(self.config['base_dir'])
-
-    @initializer
-    def repository_root(self) -> Path:
-        return Path(self.config.get('repository_root', self.base_dir))
 
     @weakproperty
     def rpc(self) -> RPC:

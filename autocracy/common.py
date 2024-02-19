@@ -327,12 +327,14 @@ class RecursiveFiles(Initializer, Decree):
 class Packages(Initializer, Decree):
     install: Collection[str] = ()
     remove: Collection[str] = ()
-    _install: Set[str]
-    _remove: Set[str]
     purge: Optional[bool] = None
     recommends: Optional[bool] = None
+    update = True
+    clean = False
     # quick = False
     gentle = False
+    _install: Set[str]
+    _remove: Set[str]
 
     @property
     def _needs_update(self) -> bool:
@@ -387,6 +389,24 @@ class Packages(Initializer, Decree):
         install = self._install
         remove = self._remove
 
+        if self.clean:
+            run(
+                ['apt-get', 'clean'],
+                capture_output=True,
+                text=True,
+                check=True,
+                stdin=DEVNULL,
+            )
+
+        if install and self.update:
+            run(
+                ['apt-get', '-qq', 'update'],
+                capture_output=True,
+                text=True,
+                check=True,
+                stdin=DEVNULL,
+            )
+
         apt_get_options: set[str] = {'-qy'}
         if remove:
             if self.purge:
@@ -425,6 +445,15 @@ class Packages(Initializer, Decree):
                     *install,
                     *(f"{package}-" for package in remove),
                 ],
+                capture_output=True,
+                text=True,
+                check=True,
+                stdin=DEVNULL,
+            )
+
+        if install and self.clean:
+            run(
+                ['apt-get', 'clean'],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -515,10 +544,12 @@ def load_policy(
     get_file: Callable[[str | Path], bytes],
     **context,
 ) -> Decree:
+    tags = load_tags('tags', subject)
     extra_builtins = {
         **_builtins,
         'subject': subject,
         **context,
+        **tags,
     }
     variables: dict[str, Any] = subdict(
         __builtins__=extra_builtins,
@@ -591,7 +622,26 @@ def load_config(filename: str | Path, **context) -> dict[str, Any]:
 
     include(filename)
 
-    return {name: value for name, value in variables.items() if not name.startswith('_')}
+    return {
+        name: value for name, value in variables.items() if not name.startswith('_')
+    }
+
+
+def load_tags(
+    filename: str | Path,
+    subject: Optional[str],
+    /,
+    **context,
+) -> dict[str, Any]:
+    tags = load_config(filename, **context)
+    if subject is None:
+        return {key: value for key, value in tags.items() if isinstance(value, set)}
+    else:
+        return {
+            key: subject in value
+            for key, value in tags.items()
+            if isinstance(value, set)
+        }
 
 
 __all__ = (
