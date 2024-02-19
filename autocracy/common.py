@@ -506,7 +506,7 @@ class Service(Initializer, Decree):
                     f"command '{' '.join(command)}' returned non-zero exit status {returncode}:\n{result.stderr}"
                 )
 
-        return self._change_enable or self._change_active
+        return bool(self._change_enable or self._change_active)
 
     def _update(self) -> None:
         change_enable = self._change_enable
@@ -540,17 +540,14 @@ class DuplicateConfigfile(BaseException):
     pass
 
 
-def load_policy(
-    subject: Union[Path, str],
+def _load_from_repository(
     get_file: Callable[[Union[Path, str]], bytes],
+    filename: str,
     **context,
-) -> Decree:
-    tags = load_tags('tags', subject)
+) -> dict[str, Any]:
     extra_builtins = {
         **_builtins,
-        'subject': subject,
         **context,
-        **tags,
     }
     variables: dict[str, Any] = subdict(
         __builtins__=extra_builtins,
@@ -589,12 +586,41 @@ def load_policy(
 
     extra_builtins['require'] = require
 
-    include('policy')
+    include(filename)
+
+    return variables
+
+
+def load_policy(
+    get_file: Callable[[Union[Path, str]], bytes],
+    subject: str,
+    **context,
+) -> Decree:
+    tags = load_tags(get_file, subject)
+
+    variables = _load_from_repository(
+        get_file, 'policy', **context, **tags, subject=subject
+    )
 
     policy = Policy(**_extract_decrees(variables))
     policy._finalize('_root')
 
     return policy
+
+
+def load_tags(
+    get_file: Callable[[Union[Path, str]], bytes],
+    subject: Optional[str] = None,
+) -> dict[str, Any]:
+    tags = _load_from_repository(get_file, 'tags')
+    if subject is None:
+        return {key: value for key, value in tags.items() if isinstance(value, set)}
+    else:
+        return {
+            key: subject in value
+            for key, value in tags.items()
+            if isinstance(value, set)
+        }
 
 
 def load_config(filename: Union[Path, str], **context) -> dict[str, Any]:
@@ -626,23 +652,6 @@ def load_config(filename: Union[Path, str], **context) -> dict[str, Any]:
     return {
         name: value for name, value in variables.items() if not name.startswith('_')
     }
-
-
-def load_tags(
-    filename: Union[Path, str],
-    subject: Optional[str],
-    /,
-    **context,
-) -> dict[str, Any]:
-    tags = load_config(filename, **context)
-    if subject is None:
-        return {key: value for key, value in tags.items() if isinstance(value, set)}
-    else:
-        return {
-            key: subject in value
-            for key, value in tags.items()
-            if isinstance(value, set)
-        }
 
 
 __all__ = (

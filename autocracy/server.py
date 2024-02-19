@@ -104,10 +104,15 @@ class Repository(BaseRepository):
 
 class BaseClient(Initializer):
     ws: web.WebSocketResponse
+    config: Object
 
     @weakproperty
     def server(self):
         raise RuntimeError("server property not initialized")
+
+    @initializer
+    def base_dir(self) -> Path:
+        return Path(self.config['base_dir'])
 
     @initializer
     def repository_root(self) -> Path:
@@ -164,11 +169,6 @@ class Admin(BaseClient):
 class Client(BaseClient):
     facts: Optional[dict] = None
     name: str
-    config: Object
-
-    @initializer
-    def base_dir(self) -> Path:
-        return Path(self.config['base_dir'])
 
     @weakproperty
     def rpc(self) -> RPC:
@@ -193,7 +193,7 @@ class Client(BaseClient):
 
         facts = Object(self.facts or {})
 
-        policy = load_policy(name, repository.get_file, facts=facts)
+        policy = load_policy(repository.get_file, name, facts=facts)
         policy._provision(repository)
 
         rpc = self.rpc

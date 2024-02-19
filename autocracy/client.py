@@ -62,7 +62,7 @@ class Client(Initializer):
         repository = Repository(files=self.files)
 
         facts = Object(self.facts or {})
-        policy = load_policy(name, repository.get_file, facts=facts)
+        policy = load_policy(repository.get_file, name, facts=facts)
         policy._provision(repository)
         try:
             await asyncio.to_thread(policy._apply)
