@@ -655,7 +655,6 @@ __all__ = (
     'Policy',
     'Run',
     'Packages',
-    'Subject',
     'load_decree',
     'load_config',
     'loadfilename',

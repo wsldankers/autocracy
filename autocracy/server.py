@@ -35,7 +35,6 @@ from .common import (
     load_tags,
     DuplicateConfigfile,
     BaseRepository,
-    Subject,
 )
 from .aiohttp import TCPSite, UnixSite
 
