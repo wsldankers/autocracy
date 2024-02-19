@@ -141,22 +141,16 @@ class Group(Initializer, Decree):
             decree._provision(repository)
 
     @initializer
-    def _members_that_need_update(self):
-        return frozenset(
-            name
-            for name, decree in self.decrees.items()
-            if decree._should_run and decree._needs_update
-        )
+    def updated(self):
+        return any(decree.updated for decree in self.decrees.values())
 
-    @property
-    def _needs_update(self):
-        return bool(self._members_that_need_update)
+    @initializer
+    def activated(self):
+        return any(decree.activated for decree in self.decrees.values())
 
-    def _update(self):
-        members_that_need_update = self._members_that_need_update
-        for name, decree in self.decrees.items():
-            if name in members_that_need_update:
-                decree._update()
+    def _apply(self):
+        for decree in self.decrees.values():
+            decree._apply()
 
     def _finalize(self, name=None):
         super()._finalize(name)
@@ -205,6 +199,7 @@ class Run(Initializer, Decree):
 
 
 class File(Initializer, Decree):
+    target: Union[Path, str]
     _file_contents: Optional[bytes] = None
 
     def _provision(self, repository: BaseRepository):
@@ -245,9 +240,9 @@ class File(Initializer, Decree):
 
     @property
     def _needs_update(self):
-        destination = self.destination
+        target = self.target
         try:
-            old_contents = get_file(destination, 'rb')
+            old_contents = get_file(target, 'rb')
         except FileNotFoundError:
             return True
         contents = self._computed_contents
@@ -255,12 +250,12 @@ class File(Initializer, Decree):
 
     def _update(self):
         print(f"{self.name}: running")
-        put_file(self._computed_contents, self.destination, 'wb')
+        put_file(self._computed_contents, self.target, 'wb')
 
 
 class RecursiveFiles(Initializer, Decree):
     _files: MutableMapping[str, bytes] = cast(MutableMapping, MappingProxyType({}))
-    destination: Union[Path, str]
+    target: Union[Path, str]
 
     def _provision(self, repository: BaseRepository):
         source = self.source
@@ -277,16 +272,16 @@ class RecursiveFiles(Initializer, Decree):
 
     @initializer
     def _existing_parents(self) -> set[Path]:
-        return {Path(self.destination).parent}
+        return {Path(self.target).parent}
 
     @property
     def _needs_update(self) -> bool:
         source = Path(self.source)
-        destination = Path(self.destination)
+        target = Path(self.target)
         files = self._files
         existing_parents = self._existing_parents
         for filename, contents in list(files.items()):
-            full_path = destination / Path(filename).relative_to(source)
+            full_path = target / Path(filename).relative_to(source)
             try:
                 old_contents = get_file(full_path, 'rb')
             except FileNotFoundError:
@@ -302,10 +297,10 @@ class RecursiveFiles(Initializer, Decree):
         print(f"{self.name}: running")
 
         source = Path(self.source)
-        destination = Path(self.destination)
+        target = Path(self.target)
         existing_parents = self._existing_parents
         for filename, contents in self._files.items():
-            full_path = destination / Path(filename).relative_to(source)
+            full_path = target / Path(filename).relative_to(source)
             print(f"updating {full_path}")
             try:
                 put_file(contents, full_path, 'wb')
