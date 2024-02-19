@@ -5,7 +5,7 @@ from pathlib import Path
 from ssl import create_default_context, Purpose, TLSVersion
 from collections import deque
 from json import dumps
-from typing import Optional, Iterable, Any
+from typing import Optional, Iterable, Any, Union
 from sys import argv, setswitchinterval
 from traceback import print_exc
 
@@ -20,10 +20,10 @@ web = aiohttp.web
 class Repository(BaseRepository):
     files: dict[Path, bytes]
 
-    def get_file(self, path: str | Path) -> bytes:
+    def get_file(self, path: Union[str, Path]) -> bytes:
         return self.files[normalize_path(path)]
 
-    def get_files(self, path: str | Path) -> dict[str, bytes]:
+    def get_files(self, path: Union[str, Path]) -> dict[str, bytes]:
         normalized_path = normalize_path(path)
         return {
             str(key): value

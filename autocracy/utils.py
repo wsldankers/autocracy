@@ -1,6 +1,6 @@
 from pathlib import Path, PurePath
 from functools import update_wrapper
-from typing import Iterable, Any, TypeVar, Callable, cast, TYPE_CHECKING
+from typing import Iterable, Any, TypeVar, Callable, Union, cast, TYPE_CHECKING
 from sys import stderr
 from functools import wraps
 from weakref import ref as weakref
@@ -341,7 +341,7 @@ class Object:
     _members: dict[Any, 'Object']
     _misses: set[Any]
 
-    def __init__(self, target: dict | list):
+    def __init__(self, target: Union[dict, list]):
         self._target = target
         self._members = {}
         self._misses = set()
@@ -529,8 +529,8 @@ class Object:
 
 
 def exports(
-    locals: dict[str, Any] | Iterable[str],
-    imports: set[str] | frozenset[str] = frozenset(),
+    locals: Union[dict[str, Any], Iterable[str]],
+    imports: Union[set[str], frozenset[str]] = frozenset(),
 ):
     """Put this just after the imports of your module:
 

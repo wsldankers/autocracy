@@ -1,6 +1,6 @@
 import asyncio
 import aiohttp.web
-from typing import Optional, Iterable
+from typing import Optional, Iterable, Union
 from os import (
     umask,
     stat,
@@ -56,7 +56,7 @@ class Repository(BaseRepository):
     def files(self) -> dict[str, tuple[bytes, stat_result]]:
         return {}
 
-    def get_file(self, path: str | Path) -> bytes:
+    def get_file(self, path: Union[Path, str]) -> bytes:
         normalized_path = str(normalize_path(path))
         files = self.files
         try:
@@ -72,7 +72,7 @@ class Repository(BaseRepository):
         files[normalized_path] = (content, st)
         return content
 
-    def get_files(self, path: str | Path) -> dict[str, bytes]:
+    def get_files(self, path: Union[Path, str]) -> dict[str, bytes]:
         normalized_path = str(normalize_path(path))
         root = self.root
         files = self.files

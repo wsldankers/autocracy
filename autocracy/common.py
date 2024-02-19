@@ -8,6 +8,7 @@ from typing import (
     MutableMapping,
     Iterable,
     Optional,
+    Union,
     Any,
     TYPE_CHECKING,
     cast,
@@ -30,11 +31,11 @@ class loadfilename(str):
 
 class BaseRepository(ABC, Initializer):
     @abstractmethod
-    def get_file(self, path: str | Path) -> bytes:
+    def get_file(self, path: Union[str, Path]) -> bytes:
         pass
 
     @abstractmethod
-    def get_files(self, path: str | Path) -> dict[str, bytes]:
+    def get_files(self, path: Union[str, Path]) -> dict[str, bytes]:
         pass
 
 
@@ -259,7 +260,7 @@ class File(Initializer, Decree):
 
 class RecursiveFiles(Initializer, Decree):
     _files: MutableMapping[str, bytes] = cast(MutableMapping, MappingProxyType({}))
-    destination: Path | str
+    destination: Union[Path, str]
 
     def _provision(self, repository: BaseRepository):
         source = self.source
@@ -267,11 +268,11 @@ class RecursiveFiles(Initializer, Decree):
             self._files = repository.get_files(source).copy()
 
     @property
-    def source(self) -> str | Path:
+    def source(self) -> Union[Path, str]:
         return self.__dict__.get('source', None)
 
     @source.setter
-    def source(self, value: str | Path):
+    def source(self, value: Union[Path, str]):
         self.__dict__['source'] = str(value)
 
     @initializer
@@ -540,8 +541,8 @@ class DuplicateConfigfile(BaseException):
 
 
 def load_policy(
-    subject: str | Path,
-    get_file: Callable[[str | Path], bytes],
+    subject: Union[Path, str],
+    get_file: Callable[[Union[Path, str]], bytes],
     **context,
 ) -> Decree:
     tags = load_tags('tags', subject)
@@ -596,7 +597,7 @@ def load_policy(
     return policy
 
 
-def load_config(filename: str | Path, **context) -> dict[str, Any]:
+def load_config(filename: Union[Path, str], **context) -> dict[str, Any]:
     extra_builtins = _builtins.copy()
     variables: dict[str, Any] = subdict(
         __builtins__=extra_builtins,
@@ -628,7 +629,7 @@ def load_config(filename: str | Path, **context) -> dict[str, Any]:
 
 
 def load_tags(
-    filename: str | Path,
+    filename: Union[Path, str],
     subject: Optional[str],
     /,
     **context,
