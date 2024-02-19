@@ -5,23 +5,23 @@ from typing import Any
 facts: Any
 
 foo = File(
-    filename='/tmp/foo',
+    destination='/tmp/foo',
     contents="Hello world!\n",
 )
 
 bar = File(
-    filename='/tmp/bar',
+    destination='/tmp/bar',
     contents="Hello world?\n",
     only_if=lambda: foo.updated,
 )
 
 factsfile = File(
-    filename='/tmp/facts',
+    destination='/tmp/facts',
     contents=f"{facts.uname.version} {facts[4].foo.bar()=}\n",
 )
 
 gitignore = File(
-    filename='/tmp/gitignore',
+    destination='/tmp/gitignore',
     source='.gitignore',
 )
 
@@ -30,7 +30,7 @@ bin = RecursiveFiles(
     destination='/tmp/recursive',
 )
 
-hello = Package(
+hello = Packages(
     install={'hello'},
     gentle=True,
     purge=True,

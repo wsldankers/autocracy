@@ -9,7 +9,7 @@ from typing import Optional, Iterable, Any
 from sys import argv, setswitchinterval
 from traceback import print_exc
 
-from .common import load_config, load_decree, BaseRepository, Subject
+from .common import load_config, load_policy, BaseRepository, Subject
 from .rpc import RPC, immediate
 from .facts import get_facts
 from .utils import *
@@ -62,10 +62,10 @@ class Client(Initializer):
         repository = Repository(files=self.files)
 
         facts = Object(self.facts or {})
-        decree = load_decree(name, repository.get_file, facts=facts)
-        decree._provision(repository)
+        policy = load_policy(name, repository.get_file, facts=facts)
+        policy._provision(repository)
         try:
-            await asyncio.to_thread(decree._apply)
+            await asyncio.to_thread(policy._apply)
         except Exception:
             print_exc()
 

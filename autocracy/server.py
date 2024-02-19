@@ -31,7 +31,7 @@ from .rpc import RPC
 from .utils import *
 from .common import (
     load_config,
-    load_decree,
+    load_policy,
     DuplicateConfigfile,
     BaseRepository,
     Subject,
@@ -177,8 +177,8 @@ class Client(BaseClient):
 
         facts = Object(self.facts or {})
 
-        decree = load_decree(name, repository.get_file, facts=facts)
-        decree._provision(repository)
+        policy = load_policy(name, repository.get_file, facts=facts)
+        policy._provision(repository)
 
         rpc = self.rpc
 

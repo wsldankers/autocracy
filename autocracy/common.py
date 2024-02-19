@@ -179,6 +179,10 @@ class Group(Initializer, Decree):
     del __delattr__
 
 
+class Policy(Group):
+    pass
+
+
 class Run(Initializer, Decree):
     @fallback
     def command(self):
@@ -240,9 +244,9 @@ class File(Initializer, Decree):
 
     @property
     def _needs_update(self):
-        filename = self.filename
+        destination = self.destination
         try:
-            old_contents = get_file(filename, 'rb')
+            old_contents = get_file(destination, 'rb')
         except FileNotFoundError:
             return True
         contents = self._computed_contents
@@ -250,7 +254,7 @@ class File(Initializer, Decree):
 
     def _update(self):
         print(f"{self.name}: running")
-        put_file(self._computed_contents, self.filename, 'wb')
+        put_file(self._computed_contents, self.destination, 'wb')
 
 
 class RecursiveFiles(Initializer, Decree):
@@ -320,7 +324,7 @@ class RecursiveFiles(Initializer, Decree):
                 put_file(contents, full_path, 'wb')
 
 
-class Package(Initializer, Decree):
+class Packages(Initializer, Decree):
     install: Collection[str] = ()
     remove: Collection[str] = ()
     _install: Set[str]
@@ -506,7 +510,7 @@ class DuplicateConfigfile(BaseException):
     pass
 
 
-def load_decree(
+def load_policy(
     subject: str | Path,
     get_file: Callable[[str | Path], bytes],
     **context,
@@ -553,12 +557,12 @@ def load_decree(
 
     extra_builtins['require'] = require
 
-    include(subject)
+    include('policy')
 
-    decree = Group(**_extract_decrees(variables))
-    decree._finalize('_root')
+    policy = Policy(**_extract_decrees(variables))
+    policy._finalize('_root')
 
-    return decree
+    return policy
 
 
 def load_config(filename: str | Path, **context) -> dict[str, Any]:
@@ -597,8 +601,9 @@ __all__ = (
     'File',
     'RecursiveFiles',
     'Group',
+    'Policy',
     'Run',
-    'Package',
+    'Packages',
     'Subject',
     'load_decree',
     'load_config',
