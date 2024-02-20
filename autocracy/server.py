@@ -2,7 +2,6 @@ import asyncio
 import aiohttp.web
 from typing import Optional, Iterable, Union
 from os import (
-    umask,
     stat,
     geteuid,
     fwalk,

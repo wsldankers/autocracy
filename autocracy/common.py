@@ -13,12 +13,16 @@ from typing import (
     TYPE_CHECKING,
     cast,
 )
+from collections import namedtuple
 from collections.abc import Collection, Sequence, Set
 from abc import ABC, abstractmethod
 from asyncio import gather
 from types import MappingProxyType
-from os import mkdir
+from os import mkdir, stat, chown, chmod, open as os_open
 from subprocess import run, DEVNULL
+from pwd import getpwnam, getpwuid
+from grp import getgrnam
+from stat import S_IMODE
 
 from .utils import *
 
@@ -198,14 +202,143 @@ class Run(Initializer, Decree):
         completed.check_returncode()
 
 
-class File(Initializer, Decree):
+class _FileHandlingAction:
+    __slots__ = ('target', 'create', 'chown', 'chmod', 'contents')
+
     target: Union[Path, str]
-    _file_contents: Optional[bytes] = None
+    create: bool
+    chown: Optional[tuple[int, int]]
+    chmod: Optional[int]
+    contents: Optional[bytes]
+
+    def __bool__(self):
+        return (
+            self.create
+            or self.chown is not None
+            or self.chmod is not None
+            or self.contents is not None
+        )
+
+    def __call__(self):
+        do_contents = self.contents
+        if do_contents is None:
+            open_mode = 'w+b'
+        else:
+            open_mode = 'wb'
+
+        do_chmod = self.chmod
+
+        def opener(path, flags):
+            open_mode = 0o600 if do_chmod else 0o666
+            return os_open(path, flags, mode=open_mode)
+
+        with open(self.target, open_mode) as fh:
+            if do_contents:
+                print('contents')
+                fh.write(do_contents)
+            fd = fh.fileno()
+            do_chown = self.chown
+            if do_chown:
+                print('chown')
+                chown(fd, *do_chown)
+            if do_chmod:
+                print('chmod')
+                chmod(fd, do_chmod)
+
+
+class _FileHandlingMixin:
+    owner: Union[str, int, None] = None
+    mode: Union[str, int] = 0o644
+
+    @initializer
+    def _owner(self):
+        owner = self.owner
+        if owner is None:
+            return (None, None)
+        owner, sep, group = f"{owner}".partition(':')
+        if owner.isdecimal() and owner.isascii():
+            pwent = None
+            uid = int(owner)
+        elif owner == '':
+            pwent = None
+            uid = None
+        else:
+            pwent = getpwnam(owner)
+            uid = pwent.pw_uid
+        if sep:
+            if group.isdecimal() and group.isascii():
+                gid = int(group)
+            elif group == '':
+                if uid is None:
+                    gid = None
+                else:
+                    if pwent is None:
+                        pwent = getpwuid(uid)
+                    gid = pwent.pw_gid
+            else:
+                gid = getgrnam(group).gr_gid
+        else:
+            gid = None
+        return (uid, gid)
+
+    @initializer
+    def _mode(self):
+        mode = self.mode
+        if isinstance(mode, str):
+            mode = int(mode, base=8)
+        return S_IMODE(mode)
+
+    def _check_file(self, target, new_contents):
+        uid, gid = self._owner
+        mode = self._mode
+        action = _FileHandlingAction()
+        action.target = target
+        try:
+            with open(target, 'rb') as fh:
+                st = stat(fh.fileno())
+                old_contents = fh.read()
+        except FileNotFoundError:
+            action.create = True
+            needs_chown = uid is not None or gid is not None
+            needs_chmod = mode is not None
+            needs_contents = True
+        else:
+            action.create = False
+            needs_chown = (uid is not None and st.st_uid != uid) or (
+                gid is not None and st.st_gid != gid
+            )
+            needs_chmod = mode is not None and S_IMODE(st.st_mode) != mode
+            needs_contents = old_contents != new_contents
+
+        if needs_chown:
+            action.chown = (-1 if uid is None else uid, -1 if gid is None else gid)
+        else:
+            action.chown = None
+
+        if needs_chmod:
+            action.chmod = mode
+        else:
+            action.chmod = None
+
+        if needs_contents:
+            action.contents = new_contents
+        else:
+            action.contents = None
+
+        return action
+
+
+class File(Initializer, _FileHandlingMixin, Decree):
+    target: Union[Path, str]
+    _contents: Optional[bytes] = None
+    _needs_chown = False
+    _needs_chmod = False
+    _needs_contents = False
 
     def _provision(self, repository: BaseRepository):
         source = self.source
         if source is not None:
-            self._file_contents = repository.get_file(source)
+            self._contents = repository.get_file(source)
 
     @property
     def contents(self):
@@ -233,7 +366,7 @@ class File(Initializer, Decree):
     def _computed_contents(self):
         contents = self.contents
         if contents is None:
-            contents = self._file_contents
+            contents = self._contents
         if isinstance(contents, str):
             contents = contents.encode('UTF-8')
         return contents
@@ -241,19 +374,14 @@ class File(Initializer, Decree):
     @property
     def _needs_update(self):
         target = self.target
-        try:
-            old_contents = get_file(target, 'rb')
-        except FileNotFoundError:
-            return True
-        contents = self._computed_contents
-        return old_contents != contents
+        self._action = self._check_file(self.target, self._computed_contents)
 
     def _update(self):
         print(f"{self.name}: running")
-        put_file(self._computed_contents, self.target, 'wb')
+        self._action()
 
 
-class RecursiveFiles(Initializer, Decree):
+class RecursiveFiles(Initializer, _FileHandlingMixin, Decree):
     _files: MutableMapping[str, bytes] = cast(MutableMapping, MappingProxyType({}))
     target: Union[Path, str]
 
@@ -263,7 +391,7 @@ class RecursiveFiles(Initializer, Decree):
             self._files = repository.get_files(source).copy()
 
     @property
-    def source(self) -> Union[Path, str]:
+    def source(self) -> Optional[str]:
         return self.__dict__.get('source', None)
 
     @source.setter
@@ -271,53 +399,61 @@ class RecursiveFiles(Initializer, Decree):
         self.__dict__['source'] = str(value)
 
     @initializer
+    def _actions(self) -> list[_FileHandlingAction]:
+        return []
+
+    @initializer
     def _existing_parents(self) -> set[Path]:
         return {Path(self.target).parent}
 
     @property
     def _needs_update(self) -> bool:
-        source = Path(self.source)
+        source_str = self.source
+        if source_str is None:
+            return False
+        source = Path(source_str)
         target = Path(self.target)
         files = self._files
+        actions = self._actions
         existing_parents = self._existing_parents
         for filename, contents in list(files.items()):
             full_path = target / Path(filename).relative_to(source)
-            try:
-                old_contents = get_file(full_path, 'rb')
-            except FileNotFoundError:
-                continue
-            self._existing_parents.update(full_path.parents)
-            if old_contents != contents:
-                continue
-            del files[filename]
+            action = self._check_file(full_path, contents)
+            if action:
+                print(action)
+                actions.append(action)
+            if not action.create:
+                self._existing_parents.update(full_path.parents)
 
-        return bool(files)
+        return bool(actions)
 
     def _update(self) -> None:
         print(f"{self.name}: running")
 
-        source = Path(self.source)
-        target = Path(self.target)
         existing_parents = self._existing_parents
-        for filename, contents in self._files.items():
-            full_path = target / Path(filename).relative_to(source)
-            print(f"updating {full_path}")
+
+        for action in self._actions:
+            print(f"updating {action.target}")
             try:
-                put_file(contents, full_path, 'wb')
+                action()
             except FileNotFoundError:
-                parent = full_path.parent
-                create = []
-                for parent in full_path.parents:
-                    if parent in existing_parents:
-                        break
-                    create.append(parent)
-                for parent in reversed(create):
-                    try:
-                        mkdir(parent)
-                    except FileExistsError:
-                        pass
-                existing_parents.update(create)
-                put_file(contents, full_path, 'wb')
+                pass
+            else:
+                continue
+            full_path = cast(Path, action.target)
+            parent = full_path.parent
+            create = []
+            for parent in full_path.parents:
+                if parent in existing_parents:
+                    break
+                create.append(parent)
+            for parent in reversed(create):
+                try:
+                    mkdir(parent)
+                except FileExistsError:
+                    pass
+            existing_parents.update(create)
+            action()
 
 
 class Packages(Initializer, Decree):

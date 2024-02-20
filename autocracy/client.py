@@ -118,7 +118,7 @@ class Client(Initializer):
 
 async def main(procname, config_file, *args, **env):
     setswitchinterval(1)
-    umask(0o027)
+    umask(0o022)
 
     config = load_config(config_file)
     base_dir = Path(config['base_dir'])

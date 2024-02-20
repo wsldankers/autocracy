@@ -28,6 +28,7 @@ gitignore = File(
 bin = RecursiveFiles(
     target='/tmp/recursive',
     source='bin',
+    mode='755',
 )
 
 hello = Packages(
