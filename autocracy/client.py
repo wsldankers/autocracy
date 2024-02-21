@@ -81,6 +81,7 @@ class Client(Initializer):
         previous_facts = object()
         facts_sleep = 0
         max_facts_interval = self.max_facts_interval
+        facts: Optional[dict[str, Any]]
         while True:
             # warn("getting facts")
             try:

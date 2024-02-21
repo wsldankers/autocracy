@@ -11,10 +11,13 @@ from collections import defaultdict
 from socket import gethostname, getaddrinfo, AI_CANONNAME, AF_INET, AF_INET6, AF_PACKET
 from sys import platform
 from os import uname
-from utils import get_file
+from typing import Any, Union
+
+from .utils import get_file
 
 
-def get_interfaces(facts):
+
+def get_interfaces(facts) -> None:
     interfaces = {}
 
     for name, addrs in net_if_addrs().items():
@@ -26,13 +29,13 @@ def get_interfaces(facts):
                 ip = ip_address(addr.address)
                 if netmask is None:
                     # to sort this after prefixed addresses:
-                    ip = (ip, ip.max_prefixlen + 1)
+                    cidr = (ip, ip.max_prefixlen + 1)
                 else:
-                    ip = (ip, int(ip_address(netmask)).bit_length())
+                    cidr = (ip, int(ip_address(netmask)).bit_length())
                 if family == AF_INET:
-                    interface['ipv4'].add(ip)
+                    interface['ipv4'].add(cidr)
                 else:
-                    interface['ipv6'].add(ip)
+                    interface['ipv6'].add(cidr)
             elif family == AF_PACKET:
                 interface['mac'] = addr.address
         interfaces[name] = interface
@@ -51,25 +54,22 @@ def get_interfaces(facts):
     }
 
 
-def get_hostname(facts):
+def get_hostname(facts) -> None:
     facts['hostname'] = gethostname()
 
 
-def get_fqdn(facts):
+def get_fqdn(facts) -> None:
     addrinfo = getaddrinfo(facts['hostname'], 0, flags=AI_CANONNAME)
     primary_address = defaultdict(set)
     for addr in addrinfo:
-        family, _, _, name, sockaddr = addr
+        af, _, _, name, sockaddr = addr
         if name:
             facts['fqdn'] = name
         address = ip_address(sockaddr[0])
-        if family == AF_INET:
+        if af == AF_INET:
             primary_address['ipv4'].add(address)
-        elif family == AF_INET6:
+        elif af == AF_INET6:
             primary_address['ipv6'].add(address)
-
-    for family in primary_address:
-        primary_address[family] = sorted(primary_address[family])
 
     if primary_address:
         facts['primary_address'] = {
@@ -78,18 +78,18 @@ def get_fqdn(facts):
         }
 
 
-def get_platform(facts):
+def get_platform(facts) -> None:
     facts['platform'] = platform
 
 
 _uname_fields = ('sysname', 'nodename', 'release', 'version', 'machine')
 
 
-def get_uname(facts):
+def get_uname(facts) -> None:
     facts['uname'] = dict(zip(_uname_fields, uname()))
 
 
-def get_cpu(facts):
+def get_cpu(facts) -> None:
     cpu = {
         'cores': cpu_count(logical=False),
         'threads': cpu_count(logical=True),
@@ -101,22 +101,22 @@ def get_cpu(facts):
     facts['cpu'] = cpu
 
 
-def get_memory(facts):
+def get_memory(facts) -> None:
     facts['memory'] = {
         'ram': virtual_memory().total,
         'swap': swap_memory().total,
     }
 
 
-def get_kvm(facts):
+def get_kvm(facts) -> None:
     try:
         if get_file('/sys/class/dmi/id/sys_vendor').strip() == 'QEMU':
             facts['kvm'] = True
     except FileNotFoundError:
         pass
 
-def get_facts():
-    facts = {}
+def get_facts() -> dict[str, Any]:
+    facts: dict[str, Any] = {}
     for f in (
         get_interfaces,
         get_hostname,
@@ -133,6 +133,7 @@ def get_facts():
         #     f(facts)
         # except Exception as e:
         #     print(str(e), file=stderr, flush=True)
+
     return facts
 
 
