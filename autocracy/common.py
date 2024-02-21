@@ -28,6 +28,8 @@ from os import (
     rmdir,
     unlink,
     symlink,
+    access,
+    F_OK,
 )
 from subprocess import run, DEVNULL
 from pwd import getpwnam, getpwuid
@@ -673,6 +675,30 @@ class Permissions(Initializer, Decree):
             chmod(target, self._mode, follow_symlinks=False)
 
 
+class Remove(Initializer, Decree):
+    target: Union[Path, str]
+    force = False
+
+    @property
+    def _needs_update(self) -> bool:
+        return access(self.target, F_OK)
+
+    def _update(self) -> None:
+        print(f"{self.name}: running")
+        target = self.target
+
+        try:
+            unlink(target)
+        except IsADirectoryError:
+            try:
+                rmdir(target)
+            except OSError as e:
+                if e.errno == ENOTEMPTY and self.force:
+                    rmtree(target)
+                else:
+                    raise e from None
+
+
 class Packages(Initializer, Decree):
     install: Collection[str] = ()
     remove: Collection[str] = ()
@@ -1008,6 +1034,7 @@ __all__ = (
     'Symlink',
     'Directory',
     'Permissions',
+    'Remove',
     'Group',
     'Policy',
     'Run',
