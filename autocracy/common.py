@@ -18,11 +18,23 @@ from collections.abc import Collection, Sequence, Set
 from abc import ABC, abstractmethod
 from asyncio import gather
 from types import MappingProxyType
-from os import mkdir, stat, chown, chmod, open as os_open
+from os import (
+    mkdir,
+    stat,
+    chown,
+    chmod,
+    open as os_open,
+    readlink,
+    rmdir,
+    unlink,
+    symlink,
+)
 from subprocess import run, DEVNULL
 from pwd import getpwnam, getpwuid
 from grp import getgrnam
-from stat import S_IMODE
+from stat import S_IMODE, S_ISLNK, S_ISDIR
+from errno import ENOTEMPTY
+from shutil import rmtree
 
 from .utils import *
 
@@ -206,6 +218,8 @@ class _FileHandlingAction:
     __slots__ = ('target', 'create', 'chown', 'chmod', 'contents')
 
     target: Union[Path, str]
+    # create is just informational but used to see if parent directories
+    # need to be created.
     create: bool
     chown: Optional[tuple[int, int]]
     chmod: Optional[int]
@@ -229,64 +243,72 @@ class _FileHandlingAction:
         do_chmod = self.chmod
 
         def opener(path, flags):
-            open_mode = 0o600 if do_chmod else 0o666
+            open_mode = 0o666 if do_chmod is None else 0o600
             return os_open(path, flags, mode=open_mode)
 
-        with open(self.target, open_mode) as fh:
+        with open(self.target, open_mode, opener=opener) as fh:
             if do_contents:
                 print('contents')
                 fh.write(do_contents)
             fd = fh.fileno()
             do_chown = self.chown
-            if do_chown:
+            if do_chown is not None:
                 print('chown')
                 chown(fd, *do_chown)
-            if do_chmod:
+            if do_chmod is not None:
                 print('chmod')
                 chmod(fd, do_chmod)
 
 
+def _parse_owner(owner: Union[str, int, None]) -> tuple[Optional[int], Optional[int]]:
+    if owner is None:
+        return (None, None)
+    owner, sep, group = f"{owner}".partition(':')
+    if owner.isdecimal() and owner.isascii():
+        pwent = None
+        uid = int(owner)
+    elif owner == '':
+        pwent = None
+        uid = None
+    else:
+        pwent = getpwnam(owner)
+        uid = pwent.pw_uid
+    if sep:
+        if group.isdecimal() and group.isascii():
+            gid = int(group)
+        elif group == '':
+            if uid is None:
+                gid = None
+            else:
+                if pwent is None:
+                    pwent = getpwuid(uid)
+                gid = pwent.pw_gid
+        else:
+            gid = getgrnam(group).gr_gid
+    else:
+        gid = None
+    return (uid, gid)
+
+
+def _parse_mode(mode: Union[str, int, None]) -> Optional[int]:
+    if mode is None:
+        return None
+    if isinstance(mode, str):
+        mode = int(mode, base=8)
+    return S_IMODE(mode)
+
+
 class _FileHandlingMixin:
     owner: Union[str, int, None] = None
-    mode: Union[str, int] = 0o644
+    mode: Union[str, int, None] = 0o644
 
     @initializer
-    def _owner(self):
-        owner = self.owner
-        if owner is None:
-            return (None, None)
-        owner, sep, group = f"{owner}".partition(':')
-        if owner.isdecimal() and owner.isascii():
-            pwent = None
-            uid = int(owner)
-        elif owner == '':
-            pwent = None
-            uid = None
-        else:
-            pwent = getpwnam(owner)
-            uid = pwent.pw_uid
-        if sep:
-            if group.isdecimal() and group.isascii():
-                gid = int(group)
-            elif group == '':
-                if uid is None:
-                    gid = None
-                else:
-                    if pwent is None:
-                        pwent = getpwuid(uid)
-                    gid = pwent.pw_gid
-            else:
-                gid = getgrnam(group).gr_gid
-        else:
-            gid = None
-        return (uid, gid)
+    def _owner(self) -> tuple[Optional[int], Optional[int]]:
+        return _parse_owner(self.owner)
 
     @initializer
-    def _mode(self):
-        mode = self.mode
-        if isinstance(mode, str):
-            mode = int(mode, base=8)
-        return S_IMODE(mode)
+    def _mode(self) -> Optional[int]:
+        return _parse_mode(self.mode)
 
     def _check_file(self, target, new_contents):
         uid, gid = self._owner
@@ -456,6 +478,199 @@ class RecursiveFiles(Initializer, _FileHandlingMixin, Decree):
                     pass
             existing_parents.update(create)
             action()
+
+
+class Symlink(Initializer, Decree):
+    target: Union[Path, str]
+    owner: Union[str, int, None] = None
+    contents: Union[str]
+    force = False
+
+    _needs_remove = False
+    _needs_chown = False
+    _needs_create = False
+
+    @initializer
+    def _owner(self) -> tuple[Optional[int], Optional[int]]:
+        return _parse_owner(self.owner)
+
+    @property
+    def _needs_update(self) -> bool:
+        target = self.target
+        uid, gid = self._owner
+        try:
+            st = stat(target, follow_symlinks=False)
+        except FileNotFoundError:
+            self._needs_create = True
+        else:
+            if S_ISLNK(st.st_mode) and readlink(target) == self.contents:
+                self._needs_chown = (uid is not None and st.st_uid != uid) or (
+                    gid is not None and st.st_gid != gid
+                )
+            else:
+                self._needs_remove = True
+
+        if self._needs_remove:
+            self._needs_create = True
+
+        if self._needs_create:
+            self._needs_chown = uid is not None or gid is not None
+
+        return self._needs_chown
+
+    def _update(self) -> None:
+        print(f"{self.name}: running")
+        target = self.target
+
+        if self._needs_remove:
+            try:
+                unlink(target)
+            except IsADirectoryError:
+                try:
+                    rmdir(target)
+                except OSError as e:
+                    if e.errno == ENOTEMPTY and self.force:
+                        rmtree(target)
+                    else:
+                        raise e from None
+
+        if self._needs_create:
+            symlink(self.contents, target)
+
+        if self._needs_chown:
+            uid, gid = self._owner
+            chown(
+                target,
+                -1 if uid is None else uid,
+                -1 if gid is None else gid,
+                follow_symlinks=False,
+            )
+
+
+class Directory(Initializer, Decree):
+    target: Union[Path, str]
+    owner: Union[str, int, None] = None
+    mode: Union[str, int, None] = 0o755
+
+    _needs_remove = False
+    _needs_chown = False
+    _needs_chmod = False
+    _needs_create = False
+
+    @initializer
+    def _owner(self) -> tuple[Optional[int], Optional[int]]:
+        return _parse_owner(self.owner)
+
+    @initializer
+    def _mode(self) -> Optional[int]:
+        return _parse_mode(self.mode)
+
+    @property
+    def _needs_update(self) -> bool:
+        target = self.target
+        uid, gid = self._owner
+        mode = self._mode
+        try:
+            st = stat(target, follow_symlinks=False)
+        except FileNotFoundError:
+            self._needs_create = True
+        else:
+            if S_ISDIR(st.st_mode):
+                self._needs_chown = (uid is not None and st.st_uid != uid) or (
+                    gid is not None and st.st_gid != gid
+                )
+                self._needs_chmod = mode is not None and S_IMODE(st.st_mode) != mode
+            else:
+                self._needs_remove = True
+
+        if self._needs_remove:
+            self._needs_create = True
+
+        if self._needs_create:
+            self._needs_chown = uid is not None or gid is not None
+            self._needs_chmod = mode is not None
+
+        return self._needs_chown or self._needs_chmod
+
+    def _update(self) -> None:
+        print(f"{self.name}: running")
+        target = self.target
+
+        if self._needs_remove:
+            unlink(target)
+
+        if self._needs_create:
+            if self._needs_chmod:
+                mkdir(target, mode=0o700)
+            else:
+                mkdir(target)
+
+        if self._needs_chown:
+            uid, gid = self._owner
+            chown(
+                target,
+                -1 if uid is None else uid,
+                -1 if gid is None else gid,
+                follow_symlinks=False,
+            )
+
+        if self._needs_chmod:
+            mode = self._mode
+            assert mode is not None
+            chmod(target, mode, follow_symlinks=False)
+
+
+class Permissions(Initializer, Decree):
+    target: Union[Path, str]
+    owner: Union[str, int, None] = None
+    mode: Union[str, int, None] = None
+    missing_ok = False
+
+    _needs_chown = False
+    _needs_chmod = False
+
+    @initializer
+    def _owner(self) -> tuple[Optional[int], Optional[int]]:
+        return _parse_owner(self.owner)
+
+    @initializer
+    def _mode(self) -> Optional[int]:
+        return _parse_mode(self.mode)
+
+    @property
+    def _needs_update(self) -> bool:
+        target = self.target
+        uid, gid = self._owner
+        mode = self._mode
+        try:
+            st = stat(target, follow_symlinks=False)
+        except FileNotFoundError:
+            if not self.missing_ok:
+                raise
+        else:
+            self._needs_chown = (uid is not None and st.st_uid != uid) or (
+                gid is not None and st.st_gid != gid
+            )
+            self._needs_chmod = mode is not None and S_IMODE(st.st_mode) != mode
+
+        return self._needs_chown or self._needs_chmod
+
+    def _update(self) -> None:
+        print(f"{self.name}: running")
+        target = self.target
+
+        if self._needs_chown:
+            uid, gid = self._owner
+            chown(
+                target,
+                -1 if uid is None else uid,
+                -1 if gid is None else gid,
+                follow_symlinks=False,
+            )
+
+        if self._needs_chmod:
+            assert self._mode is not None
+            chmod(target, self._mode, follow_symlinks=False)
 
 
 class Packages(Initializer, Decree):
@@ -788,16 +1003,13 @@ def load_config(filename: Union[Path, str], **context) -> dict[str, Any]:
 
 
 __all__ = (
-    'BaseRepository',
-    'Decree',
-    'DuplicateConfigfile',
     'File',
     'RecursiveFiles',
+    'Symlink',
+    'Directory',
+    'Permissions',
     'Group',
     'Policy',
     'Run',
     'Packages',
-    'load_decree',
-    'load_config',
-    'loadfilename',
 )

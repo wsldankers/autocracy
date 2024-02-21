@@ -11,6 +11,7 @@ from collections import defaultdict
 from socket import gethostname, getaddrinfo, AI_CANONNAME, AF_INET, AF_INET6, AF_PACKET
 from sys import platform
 from os import uname
+from utils import get_file
 
 
 def get_interfaces(facts):
@@ -107,6 +108,13 @@ def get_memory(facts):
     }
 
 
+def get_kvm(facts):
+    try:
+        if get_file('/sys/class/dmi/id/sys_vendor').strip() == 'QEMU':
+            facts['kvm'] = True
+    except FileNotFoundError:
+        pass
+
 def get_facts():
     facts = {}
     for f in (
@@ -117,6 +125,7 @@ def get_facts():
         get_uname,
         get_cpu,
         get_memory,
+        get_kvm,
     ):
         f(facts)
 
