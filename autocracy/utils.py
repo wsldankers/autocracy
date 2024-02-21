@@ -1,10 +1,20 @@
 from pathlib import Path, PurePath
 from functools import update_wrapper
-from typing import Iterable, Any, TypeVar, Callable, Union, cast, TYPE_CHECKING
+from typing import (
+    Iterable,
+    Any,
+    TypeVar,
+    Callable,
+    Optional,
+    Union,
+    cast,
+    TYPE_CHECKING,
+)
 from sys import stderr
 from functools import wraps
 from weakref import ref as weakref
 from collections.abc import KeysView
+from os.path import commonprefix
 
 
 class Initializer:
@@ -175,6 +185,34 @@ def warn(*args, **kwargs):
     kwargs.setdefault('file', stderr)
     kwargs.setdefault('flush', True)
     return print(*args, **kwargs)
+
+
+def clean_whitespace(text: str, max_empty_lines: Optional[int] = 1) -> str:
+    """
+    Deindent the text by removing common leading whitespace on each line.
+    Also remove leading and trailing empty lines, trailing whitespace on
+    each line, and ensure that the text ends with a newline.
+    Consecutive empty lines are reduced in number to max_empty_lines unless
+    this parameter is None.
+    """
+
+    lines: list[str] = []
+    empty_lines = 0
+    for line in text.rstrip().splitlines():
+        line = line.rstrip()
+        if line:
+            if lines:
+                lines.extend(("",) * empty_lines)
+            empty_lines = 0
+            lines.append(line)
+        else:
+            empty_lines += 1
+            if max_empty_lines is not None and empty_lines > max_empty_lines:
+                empty_lines = max_empty_lines
+
+    prefix = commonprefix(list(filter(None, lines)))
+    prefix_len = len(prefix) - len(prefix.lstrip())
+    return ''.join(line[prefix_len:] + "\n" for line in lines)
 
 
 def call_if_callable(v, *args, **kwargs):
