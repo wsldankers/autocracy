@@ -374,7 +374,9 @@ class File(Initializer, _FileHandlingMixin, Decree):
     @property
     def _needs_update(self):
         target = self.target
-        self._action = self._check_file(self.target, self._computed_contents)
+        action = self._check_file(self.target, self._computed_contents)
+        self._action = action
+        return bool(action)
 
     def _update(self):
         print(f"{self.name}: running")
