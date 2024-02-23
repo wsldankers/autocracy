@@ -171,6 +171,22 @@ def ensure_bytes(obj):
     raise TypeError(f"cannot convert '{type(obj).__name__}' object to bytes")
 
 
+def coalesce(*args):
+    """Return the first non-None argument (or None)."""
+    for arg in args:
+        if arg is not None:
+            return arg
+
+
+def is_false(value: Any) -> bool:
+    """Return if falsey but not None (for tristate values)."""
+    return value is not None and not value
+
+
+# Cast to True (for symmetry with is_false())
+is_true = bool
+
+
 def get_file(*args, **kwargs):
     with open(*args, **kwargs) as fh:
         return fh.read()
@@ -603,6 +619,7 @@ __all__ = (
     'Initializer',
     'Object',
     'call_if_callable',
+    'coalesce',
     'ensure_bytes',
     'exports',
     'fallback',
@@ -610,6 +627,8 @@ __all__ = (
     'ghost',
     'initializer',
     'is_byteslike',
+    'is_false',
+    'is_true',
     'normalize_path',
     'put_file',
     'subdict',
