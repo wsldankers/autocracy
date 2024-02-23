@@ -89,7 +89,7 @@ class Decree:
         if not self.name:
             self.name = name
 
-    def _finalize(self, name: Optional[str] = None):
+    def _prepare(self, name: Optional[str] = None):
         if name and not self.name:
             self.name = name
         self.applied = False
@@ -170,11 +170,11 @@ class Group(Initializer, Decree):
         for decree in self.decrees.values():
             decree._apply()
 
-    def _finalize(self, name=None):
-        super()._finalize(name)
+    def _prepare(self, name=None):
+        super()._prepare(name)
         decrees = _extract_decrees(vars(self))
         for subname, decree in decrees.items():
-            decree._finalize(subname)
+            decree._prepare(subname)
         self.decrees = decrees
 
     # To appease mypy:
@@ -837,22 +837,29 @@ class Packages(Initializer, Decree):
 
 
 class Service(Initializer, Decree):
+    unit: str
     reload = False
     restart = False
     enable: Optional[bool] = None
     active: Optional[bool] = None
     mask: Optional[bool] = None
+
     _change_enable: Optional[bool] = None
     _change_active: Optional[bool] = None
     _change_mask: Optional[bool] = None
     _was_active = False
-    unit: str
 
-    def _finalize(self, name: Optional[str] = None) -> None:
-        super()._finalize()
+    def _prepare(self, name: Optional[str] = None) -> None:
+        super()._prepare()
+
         if is_true(self.mask) and (is_true(self.enable) or is_true(self.active)):
             raise RuntimeError(
                 "{self.name}: masked units can't be enabled or activated"
+            )
+
+        if is_false(self.active) and (is_true(self.reload) or is_true(self.restart)):
+            raise RuntimeError(
+                "{self.name}: deactivated units can't be reloaded or restarted"
             )
 
     def _systemctl_is_enabled(self):
@@ -960,8 +967,8 @@ class Service(Initializer, Decree):
         if not reload and not restart:
             return
 
-        if self._change_active:
-            # We just started it, no use reloading/restarting it again
+        if self._change_active is not None:
+            # We just started or stopped it, no use reloading/restarting it again
             return
 
         if not self._was_active:
@@ -1052,7 +1059,7 @@ def load_policy(
     )
 
     policy = Policy(**_extract_decrees(variables))
-    policy._finalize('_root')
+    policy._prepare('_root')
 
     return policy
 
