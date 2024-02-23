@@ -354,6 +354,8 @@ class _FileHandlingMixin:
 
 class File(Initializer, _FileHandlingMixin, Decree):
     target: Union[Path, str]
+    makedirs = False
+
     _contents: Optional[bytes] = None
     _needs_chown = False
     _needs_chmod = False
@@ -404,6 +406,17 @@ class File(Initializer, _FileHandlingMixin, Decree):
 
     def _update(self):
         print(f"{self.name}: running")
+
+        if self.makedirs:
+            try:
+                self._action()
+            except FileNotFoundError:
+                pass
+            else:
+                return
+
+            Path(self.target).parent.mkdir(parents=True)
+
         self._action()
 
 
