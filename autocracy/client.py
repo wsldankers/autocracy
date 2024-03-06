@@ -4,12 +4,12 @@ from os import umask
 from pathlib import Path
 from ssl import create_default_context, Purpose, TLSVersion
 from collections import deque
-from json import dumps
-from typing import Optional, Iterable, Any, Union
-from sys import argv, setswitchinterval
+from typing import Optional, Any, Union
+from sys import setswitchinterval
 from traceback import print_exc
 
-from .common import load_config, load_policy, BaseRepository
+from .common import load_config, load_policy
+from .edicts.base import BaseRepository
 from .rpc import RPC, immediate
 from .facts import get_facts
 from .utils import *

@@ -5,13 +5,13 @@ from psutil import (
     virtual_memory,
     swap_memory,
 )
-from ipaddress import ip_address, ip_network
+from ipaddress import ip_address
 from decimal import Decimal
 from collections import defaultdict
 from socket import gethostname, getaddrinfo, AI_CANONNAME, AF_INET, AF_INET6, AF_PACKET
 from sys import platform
 from os import uname
-from typing import Any, Union
+from typing import Any
 
 from .utils import get_file
 

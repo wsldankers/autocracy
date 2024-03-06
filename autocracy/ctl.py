@@ -1,9 +1,7 @@
 import asyncio
 import aiohttp.web
-from sys import argv
 from os import getenv
 
-from .common import warn
 from .rpc import RPC
 
 

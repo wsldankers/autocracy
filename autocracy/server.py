@@ -6,7 +6,6 @@ from os import (
     geteuid,
     fwalk,
     open as os_open,
-    close as os_close,
     stat_result,
     getuid,
     initgroups,
@@ -14,27 +13,20 @@ from os import (
     setresuid,
     environ,
 )
-from sys import stderr, argv, setswitchinterval
+from sys import setswitchinterval
 from pathlib import Path
 from ssl import create_default_context, Purpose, TLSVersion, CERT_REQUIRED
-from json import loads
-from traceback import print_exc
 from struct import Struct
 from socket import SOL_SOCKET, SO_PEERCRED
 from pwd import getpwuid, getpwnam
-from weakref import WeakValueDictionary, ref as weakref
+from weakref import ref as weakref
 from stat import S_ISREG
 from pwd import getpwnam
 
 from .rpc import RPC
 from .utils import *
-from .common import (
-    load_config,
-    load_policy,
-    load_tags,
-    DuplicateConfigfile,
-    BaseRepository,
-)
+from .common import load_config, load_policy, load_tags
+from .edicts.base import BaseRepository
 from .aiohttp import TCPSite, UnixSite
 
 

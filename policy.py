@@ -1,5 +1,5 @@
 from json import dumps
-from autocracy.common import File, Run, Group, RecursiveFiles, Packages
+from autocracy.edicts import File, Run, Group, RecursiveFiles, Packages
 from typing import Any
 
 facts: Any
