@@ -132,11 +132,11 @@ class Group(Initializer, Decree):
 
     @initializer
     def updated(self):
-        return any(decree.updated for decree in self.decrees)
+        return any(decree.updated for decree in self._decrees)
 
     @initializer
     def activated(self):
-        return any(decree.activated for decree in self.decrees)
+        return any(decree.activated for decree in self._decrees)
 
     def _apply(self):
         for decree in self._decrees:
