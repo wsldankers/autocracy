@@ -448,12 +448,12 @@ class Object:
         except KeyError:
             return ghost
 
-    def __contains__(self, key):
+    def __contains__(self, sub):
         target = self._target
         if isinstance(target, dict) and not isinstance(sub, str):
             return ghost
             # raise TypeError(f"dict key must be a string, not {type(sub).__name__}")
-        return key in target
+        return sub in target
 
     def __delattr__(self, key):
         raise NotImplemented("this object is read-only")
