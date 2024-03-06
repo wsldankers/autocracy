@@ -16,7 +16,6 @@ from typing import Any, Union
 from .utils import get_file
 
 
-
 def get_interfaces(facts) -> None:
     interfaces = {}
 
@@ -42,12 +41,18 @@ def get_interfaces(facts) -> None:
 
     facts['interfaces'] = {
         name: {
-            family: [
-                str(addr) if prefixlen > addr.max_prefixlen else f"{addr}/{prefixlen}"
-                for addr, prefixlen in sorted(addrs)
-            ]
-            if isinstance(addrs, set)
-            else addrs
+            family: (
+                [
+                    (
+                        str(addr)
+                        if prefixlen > addr.max_prefixlen
+                        else f"{addr}/{prefixlen}"
+                    )
+                    for addr, prefixlen in sorted(addrs)
+                ]
+                if isinstance(addrs, set)
+                else addrs
+            )
             for family, addrs in families.items()
         }
         for name, families in interfaces.items()
@@ -108,12 +113,13 @@ def get_memory(facts) -> None:
     }
 
 
-def get_kvm(facts) -> None:
+def get_qemu(facts) -> None:
     try:
         if get_file('/sys/class/dmi/id/sys_vendor').strip() == 'QEMU':
-            facts['kvm'] = True
+            facts['qemu'] = True
     except FileNotFoundError:
         pass
+
 
 def get_facts() -> dict[str, Any]:
     facts: dict[str, Any] = {}
@@ -125,7 +131,7 @@ def get_facts() -> dict[str, Any]:
         get_uname,
         get_cpu,
         get_memory,
-        get_kvm,
+        get_qemu,
     ):
         f(facts)
 

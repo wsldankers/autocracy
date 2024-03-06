@@ -126,7 +126,11 @@ class Admin(BaseClient):
             apply=self.apply,
             online=self.online,
             quit=self.quit,
+            facts=self.facts,
         )
+
+    async def facts(self, name):
+        return (self.server.clients[name].facts,)
 
     async def online(self):
         return list(self.server.clients)
