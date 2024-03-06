@@ -1,7 +1,7 @@
 from pathlib import Path
 from subprocess import run
 from inspect import currentframe
-from typing import Optional, Union, TYPE_CHECKING
+from typing import Optional, Union, Sequence, TYPE_CHECKING
 from abc import ABC, abstractmethod
 from subprocess import run
 
@@ -27,6 +27,7 @@ class BaseRepository(ABC, Initializer):
 class Decree:
     only_if = True
     name = ""
+    applied = False
 
     if TYPE_CHECKING:
 
@@ -59,24 +60,17 @@ class Decree:
     def _prepare(self, name: Optional[str] = None):
         if name and not self.name:
             self.name = name
-        self.applied = False
-        self.updated = False
-        self.activated = False
 
     def _provision(self, repository: BaseRepository):
         pass
 
     @fallback
-    def applied(self):
-        raise RuntimeError(f"{self}: not initialized yet (did you forget a lambda?)")
-
-    @fallback
     def updated(self):
-        raise RuntimeError(f"{self}: not initialized yet (did you forget a lambda?)")
+        raise RuntimeError(f"{self}: not applied yet (did you forget a lambda?)")
 
     @fallback
     def activated(self):
-        raise RuntimeError(f"{self}: not initialized yet (did you forget a lambda?)")
+        raise RuntimeError(f"{self}: not applied yet (did you forget a lambda?)")
 
     @property
     def _should_activate(self):
@@ -88,9 +82,13 @@ class Decree:
         if self._needs_update:
             self._update()
             self.updated = True
+        else:
+            self.updated = False
         if self._should_activate:
             self._activate()
             self.activated = True
+        else:
+            self.activated = False
         self.applied = True
 
     def _update(self):
@@ -118,31 +116,32 @@ def extract_decrees(mapping: dict[str, Decree]) -> dict[str, Decree]:
 
 class Group(Initializer, Decree):
     @fallback
-    def decrees(self) -> dict[str, Decree]:
+    def _decrees(self) -> Sequence[Decree]:
         raise RuntimeError(f"{self}: not initialized yet (did you forget a lambda?)")
-
-    def _provision(self, repository: BaseRepository):
-        for decree in self.decrees.values():
-            decree._provision(repository)
-
-    @initializer
-    def updated(self):
-        return any(decree.updated for decree in self.decrees.values())
-
-    @initializer
-    def activated(self):
-        return any(decree.activated for decree in self.decrees.values())
-
-    def _apply(self):
-        for decree in self.decrees.values():
-            decree._apply()
 
     def _prepare(self, name=None):
         super()._prepare(name)
         decrees = extract_decrees(vars(self))
         for subname, decree in decrees.items():
             decree._prepare(subname)
-        self.decrees = decrees
+        self._decrees = decrees.values()
+
+    def _provision(self, repository: BaseRepository):
+        for decree in self._decrees:
+            decree._provision(repository)
+
+    @initializer
+    def updated(self):
+        return any(decree.updated for decree in self.decrees)
+
+    @initializer
+    def activated(self):
+        return any(decree.activated for decree in self.decrees)
+
+    def _apply(self):
+        for decree in self._decrees:
+            decree._apply()
+        self.applied = True
 
     # To appease mypy:
     def __getattr__(self, name: str) -> Decree:
