@@ -1014,20 +1014,19 @@ def _load_from_repository(
     filename: str,
     **context,
 ) -> dict[str, Any]:
-    extra_builtins = {
-        **_builtins,
-        **context,
-    }
-    variables: dict[str, Any] = subdict(
-        __builtins__=extra_builtins,
-        __file__=None,
-    )
+    builtins: dict[str, Any] = subdict(__file__=None)
+    builtins.update(_builtins)
+    builtins.update(context)
+    weak_builtins = weakref(builtins)
+
+    variables: dict[str, Any] = subdict(__builtins__=builtins)
     weak_variables = weakref(variables)
 
     seen = set()
 
     def load(path, ignore_duplicate):
         variables = weak_variables()
+        builtins = weak_builtins()
         filename = f"{normalize_path(path)}.py"
         if filename in seen:
             if ignore_duplicate:
@@ -1037,23 +1036,23 @@ def _load_from_repository(
         seen.add(filename)
         content = get_file(filename)
 
-        old_file = variables['__file__']
+        old_file = builtins['__file__']
         try:
-            variables['__file__'] = str(filename)
+            builtins['__file__'] = str(filename)
             code = compile(content, loadfilename(filename), 'exec')
             exec(code, variables)
         finally:
-            variables['__file__'] = old_file
+            builtins['__file__'] = old_file
 
     def include(path):
         load(path, False)
 
-    extra_builtins['include'] = include
+    builtins['include'] = include
 
     def require(path):
         load(path, True)
 
-    extra_builtins['require'] = require
+    builtins['require'] = require
 
     include(filename)
 
@@ -1093,28 +1092,29 @@ def load_tags(
 
 
 def load_config(filename: Union[Path, str], **context) -> dict[str, Any]:
-    extra_builtins = _builtins.copy()
-    variables: dict[str, Any] = subdict(
-        __builtins__=extra_builtins,
-        __file__=None,
-    )
+    builtins: dict[str, Any] = subdict(__file__=None)
+    builtins.update(_builtins)
+    weak_builtins = weakref(builtins)
+
+    variables: dict[str, Any] = dict(__builtins__=builtins)
     variables.update(context)
     weak_variables = weakref(variables)
 
     def include(filename):
+        builtins = weak_builtins()
         variables = weak_variables()
-        content = get_file(filename)
 
-        old_file = variables['__file__']
+        old_file = builtins['__file__']
         new_file = str(Path(old_file or '.').parent / filename)
+        content = get_file(new_file)
         try:
-            variables['__file__'] = new_file
+            builtins['__file__'] = new_file
             code = compile(content, new_file, 'exec')
             exec(code, variables)
         finally:
-            variables['__file__'] = old_file
+            builtins['__file__'] = old_file
 
-    extra_builtins['include'] = include
+    builtins['include'] = include
 
     include(filename)
 

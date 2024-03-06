@@ -24,7 +24,7 @@ Description: System configuration system (server)
 
 Package: autocracy-client
 Architecture: all
-Depends: ${misc:Depends}, ${python3:Depends}, python3-autocracy, python3-aiohttp
+Depends: ${misc:Depends}, ${python3:Depends}, python3-autocracy, python3-aiohttp, python3-psutil
 Description: System configuration system (client)
  Configures your systems according to your specifications.
  .
