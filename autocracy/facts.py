@@ -30,7 +30,8 @@ def get_interfaces(facts) -> None:
                     # to sort this after prefixed addresses:
                     cidr = (ip, ip.max_prefixlen + 1)
                 else:
-                    cidr = (ip, int(ip_address(netmask)).bit_length())
+                    # cidr = (ip, int(ip_address(netmask)).bit_count())
+                    cidr = (ip, bin(int(ip_address(netmask))).count('1'))
                 if family == AF_INET:
                     interface['ipv4'].add(cidr)
                 else:

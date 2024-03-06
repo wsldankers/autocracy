@@ -23,6 +23,7 @@ Send an answer indicating failure to the previous command:
 import asyncio
 import aiohttp
 from typing import Callable
+from traceback import format_exc
 
 from .utils import Initializer, initializer, warn
 
@@ -95,8 +96,7 @@ class RPC(Initializer):
         try:
             result = await handler(*args)
         except Exception as e:
-            # from traceback import print_exc
-            # print_exc()
+            warn(format_exc())
             await ws.send_json([False, cid, str(e)])
         else:
             if result is None:
