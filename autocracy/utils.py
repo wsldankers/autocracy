@@ -11,9 +11,10 @@ from typing import (
     TYPE_CHECKING,
 )
 from sys import stderr
+from types import MappingProxyType
 from functools import wraps
 from weakref import ref as weakref
-from collections.abc import KeysView
+from collections.abc import KeysView, Mapping
 from os.path import commonprefix
 
 
@@ -185,6 +186,16 @@ def is_false(value: Any) -> bool:
 
 # Cast to True (for symmetry with is_false())
 is_true = bool
+
+
+def frozendict(*args, **kwargs) -> MappingProxyType:
+    if len(args) == 1 and not kwargs:
+        (arg,) = args
+        if isinstance(arg, MappingProxyType):
+            return arg
+        if isinstance(arg, Mapping):
+            return MappingProxyType(arg)
+    return MappingProxyType(dict(*args, **kwargs))
 
 
 def get_file(*args, **kwargs):
@@ -629,6 +640,7 @@ __all__ = (
     'is_byteslike',
     'is_false',
     'is_true',
+    'frozendict',
     'normalize_path',
     'put_file',
     'subdict',

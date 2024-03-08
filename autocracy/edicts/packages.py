@@ -1,15 +1,15 @@
 from subprocess import run
 from typing import Optional
-from collections.abc import Collection, Set
+from collections.abc import Collection, Mapping, Set
 from subprocess import run, DEVNULL
+from os import environ
 
 from ..utils import *
 from .base import Decree
 
 
 class Packages(Initializer, Decree):
-    install: Collection[str] = ()
-    remove: Collection[str] = ()
+    install: Mapping[str, bool] = frozendict()
     purge: Optional[bool] = None
     recommends: Optional[bool] = None
     update = True
@@ -60,8 +60,17 @@ class Packages(Initializer, Decree):
                     f"package {name}:{arch} has unknown status '{status}'"
                 )
 
-        install = frozenset(self.install) - installed
-        remove = frozenset(self.remove) & installed
+        install = set()
+        remove = set()
+        for package, action in self.install.items():
+            if action is None:
+                continue
+            if action:
+                if package not in installed:
+                    install.add(package)
+            else:
+                if package in installed:
+                    remove.add(package)
 
         self._install = install
         self._remove = remove
@@ -90,7 +99,13 @@ class Packages(Initializer, Decree):
                 stdin=DEVNULL,
             )
 
-        apt_get_options: set[str] = {'-qy'}
+        env = {
+            'UCF_FORCE_CONFFOLD': '1',
+            'DEBIAN_FRONTEND': 'noninteractive',
+            **environ,
+        }
+
+        apt_get_options = {'-o', 'Dpkg::Options::=--force-confold', '-qy'}
         if remove:
             if self.purge:
                 apt_get_options.add('--purge')
@@ -118,6 +133,7 @@ class Packages(Initializer, Decree):
                 text=True,
                 check=True,
                 stdin=DEVNULL,
+                env=env,
             )
         else:
             run(
@@ -132,6 +148,7 @@ class Packages(Initializer, Decree):
                 text=True,
                 check=True,
                 stdin=DEVNULL,
+                env=env,
             )
 
         if install and self.clean:
