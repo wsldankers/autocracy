@@ -8,7 +8,7 @@ Standards-Version: 3.9.1
 
 Package: python3-autocracy
 Architecture: all
-Depends: ${misc:Depends}, ${python3:Depends}, python3-aiohttp
+Depends: ${misc:Depends}, ${python3:Depends}, python3-psutil, python3-aiohttp, python3-lxml
 Description: System configuration system (common library)
  Configures your systems according to your specifications.
  .
@@ -16,7 +16,7 @@ Description: System configuration system (common library)
 
 Package: autocracy-server
 Architecture: all
-Depends: ${misc:Depends}, ${python3:Depends}, python3-autocracy, python3-aiohttp, openssl
+Depends: ${misc:Depends}, ${python3:Depends}, python3-autocracy, openssl
 Description: System configuration system (server)
  Configures your systems according to your specifications.
  .
@@ -24,7 +24,7 @@ Description: System configuration system (server)
 
 Package: autocracy-client
 Architecture: all
-Depends: ${misc:Depends}, ${python3:Depends}, python3-autocracy, python3-aiohttp, python3-psutil
+Depends: ${misc:Depends}, ${python3:Depends}, python3-autocracy
 Description: System configuration system (client)
  Configures your systems according to your specifications.
  .
