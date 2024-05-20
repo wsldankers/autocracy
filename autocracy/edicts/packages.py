@@ -105,7 +105,7 @@ class Packages(Initializer, Decree):
             **environ,
         }
 
-        apt_get_options = {'-o', 'Dpkg::Options::=--force-confold', '-qy'}
+        apt_get_options = {'--option=Dpkg::Options::=--force-confold', '-qy'}
         if remove:
             if self.purge:
                 apt_get_options.add('--purge')
