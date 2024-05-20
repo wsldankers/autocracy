@@ -87,6 +87,8 @@ class KeyValue(dict):
                     write_key_value(key, value)
 
             for name, section in sections:
+                if fh.tell():
+                    print("", end=newline, file=fh)
                 print(f"[{name}]", end=newline, file=fh)
                 for key, value in section.items():
                     write_key_value(key, value)
