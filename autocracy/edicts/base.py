@@ -33,10 +33,10 @@ class Decree:
 
         @property
         def _needs_update(self) -> bool:
-            return True
+            return False
 
     else:
-        _needs_update = True
+        _needs_update = False
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -79,23 +79,19 @@ class Decree:
     def _apply(self):
         if self.applied:
             raise RuntimeError(f"{self}: refused attempt to run twice")
-        if self._needs_update:
-            self._update()
-            self.updated = True
-        else:
-            self.updated = False
-        if self._should_activate:
-            self._activate()
-            self.activated = True
-        else:
-            self.activated = False
+        # warn(f"{self}: updating")
+        self.updated = self._needs_update and self._update() is not NotImplemented
+        # warn(f"{self}: activating")
+        self.activated = (
+            self._should_activate and self._activate() is not NotImplemented
+        )
         self.applied = True
 
     def _update(self):
-        pass
+        return NotImplemented
 
     def _activate(self):
-        pass
+        return NotImplemented
 
     def __str__(self):
         name = self.name
@@ -132,6 +128,10 @@ class Group(Initializer, Decree):
 
     @initializer
     def updated(self):
+        # warn(f"{self}:")
+        # for decree in self._decrees:
+        #     warn(f"\t{decree}: {decree.updated!r} {decree.activated!r}")
+
         return any(decree.updated for decree in self._decrees)
 
     @initializer

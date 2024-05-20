@@ -1,5 +1,5 @@
 from configparser import ConfigParser
-from collections.abc import Mapping, Collection
+from collections.abc import Mapping, Iterable
 from io import StringIO
 from lxml.etree import Element, _Element, ElementTree
 from json import dumps
@@ -34,14 +34,12 @@ class KeyValue(dict):
         key_separator=' = ',
         value_separator=' ',
         continuation_indent="\t",
-        skip_empty=False,
     ):
         super().__init__(*args)
         self.newline = newline
         self.key_separator = key_separator
         self.value_separator = value_separator
         self.continuation_indent = continuation_indent
-        self.skip_empty = skip_empty
 
     def __str__(self):
         newline = self.newline
@@ -50,29 +48,51 @@ class KeyValue(dict):
         key_separator = self.key_separator
         value_separator = self.value_separator
         continuation_indent = self.continuation_indent
-        skip_empty = self.skip_empty
 
         with StringIO() as fh:
-            for key, value in self.items():
+
+            def write_key_value(key, value):
                 if value is None:
-                    continue
+                    print(key, end=newline, file=fh)
+                else:
+                    if not isinstance(value, str):
+                        if isinstance(value, Iterable):
+                            if value_separator is None:
+                                for v in value:
+                                    write_key_value(key, v)
+                                return
+                            value = value_separator.join(value)
+                        else:
+                            value = str(value)
 
-                if skip_empty and not value:
-                    continue
+                    iterator = iter(_newline_split(value))
 
-                if not isinstance(value, str):
-                    if isinstance(value, Collection):
-                        value = value_separator.join(value)
-                    else:
-                        value = str(value)
+                    print(
+                        key, key_separator, next(iterator), sep='', end=newline, file=fh
+                    )
+                    for line in iterator:
+                        print(
+                            continuation_indent,
+                            next(iterator),
+                            sep='',
+                            end=newline,
+                            file=fh,
+                        )
 
-                iterator = iter(_newline_split(value))
+            sections = []
+            for key, value in self.items():
+                if isinstance(value, Mapping):
+                    sections.append((key, value))
+                else:
+                    write_key_value(key, value)
 
-                print(key, key_separator, next(iterator), sep='', end=newline)
-                for line in iterator:
-                    print(continuation_indent, next(iterator), sep='', end=newline)
+            for name, section in sections:
+                print(f"[{name}]", end=newline, file=fh)
+                for key, value in section.items():
+                    write_key_value(key, value)
 
             return fh.getvalue()
+
 
 class XML(list):
     def __init__(self, *args, **kwargs):

@@ -12,7 +12,7 @@ from typing import (
     TYPE_CHECKING,
     cast,
 )
-from collections.abc import Collection, Set
+from collections.abc import Iterable, Set
 from abc import ABC, abstractmethod
 from types import MappingProxyType
 from os import (

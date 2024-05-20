@@ -1,6 +1,6 @@
 from subprocess import run
 from typing import Optional
-from collections.abc import Collection, Mapping, Set
+from collections.abc import Iterable, Mapping, Set
 from subprocess import run, DEVNULL
 from os import environ
 

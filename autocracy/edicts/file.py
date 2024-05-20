@@ -384,9 +384,9 @@ class Directory(Initializer, Decree):
     mode: Union[str, int, None] = 0o755
 
     _needs_remove = False
+    _needs_create = False
     _needs_chown = False
     _needs_chmod = False
-    _needs_create = False
 
     @initializer
     def _owner(self) -> tuple[Optional[int], Optional[int]]:
@@ -413,15 +413,13 @@ class Directory(Initializer, Decree):
                 self._needs_chmod = mode is not None and S_IMODE(st.st_mode) != mode
             else:
                 self._needs_remove = True
-
-        if self._needs_remove:
-            self._needs_create = True
+                self._needs_create = True
 
         if self._needs_create:
             self._needs_chown = uid is not None or gid is not None
             self._needs_chmod = mode is not None
 
-        return self._needs_chown or self._needs_chmod
+        return self._needs_create or self._needs_chown or self._needs_chmod
 
     def _update(self) -> None:
         print(f"{self.name}: running")
