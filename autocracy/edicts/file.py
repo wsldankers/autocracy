@@ -199,11 +199,19 @@ class File(Initializer, _FileHandlingMixin, Decree):
     @initializer
     def _computed_contents(self):
         contents = self.contents
+
         if contents is None:
-            contents = self._contents
-        if isinstance(contents, str):
-            contents = contents.encode('UTF-8')
-        return contents
+            return self._contents
+
+        if is_byteslike(contents):
+            return contents
+
+        try:
+            return bytes(contents)
+        except TypeError:
+            pass
+
+        return str(contents).encode('UTF-8')
 
     @property
     def _needs_update(self):
