@@ -2,7 +2,7 @@ from configparser import ConfigParser
 from collections.abc import Mapping, Collection
 from io import StringIO
 from lxml.etree import Element, _Element, ElementTree
-from JSON import dumps
+from json import dumps
 from re import compile as regcomp
 from os import linesep
 
@@ -36,7 +36,7 @@ class KeyValue(dict):
         continuation_indent="\t",
         skip_empty=False,
     ):
-        super.__init__(*args)
+        super().__init__(*args)
         self.newline = newline
         self.key_separator = key_separator
         self.value_separator = value_separator
@@ -71,7 +71,7 @@ class KeyValue(dict):
 
 class XML(list):
     def __init__(self, *args, **kwargs):
-        super.__init__(args)
+        super().__init__(args)
         kwargs.setdefault('xml_declaration', True)
         kwargs.setdefault('pretty_print', True)
         self.options = kwargs
