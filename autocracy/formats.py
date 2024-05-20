@@ -51,6 +51,7 @@ class KeyValue(dict):
         value_separator = self.value_separator
         continuation_indent = self.continuation_indent
         skip_empty = self.skip_empty
+
         with StringIO() as fh:
             for key, value in self.items():
                 if value is None:
@@ -59,8 +60,11 @@ class KeyValue(dict):
                 if skip_empty and not value:
                     continue
 
-                if not isinstance(value, str) and isinstance(value, Collection):
-                    value = value_separator.join(value)
+                if not isinstance(value, str):
+                    if isinstance(value, Collection):
+                        value = value_separator.join(value)
+                    else:
+                        value = str(value)
 
                 iterator = iter(_newline_split(value))
 
@@ -68,6 +72,7 @@ class KeyValue(dict):
                 for line in iterator:
                     print(continuation_indent, next(iterator), sep='', end=newline)
 
+            return fh.getvalue()
 
 class XML(list):
     def __init__(self, *args, **kwargs):

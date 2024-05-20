@@ -39,6 +39,9 @@ class Service(Initializer, Decree):
         enabled = result.stdout.strip()
         returncode = result.returncode
         if not enabled and returncode:
+            if returncode == 1:
+                # Assume the unit doesn't exist:
+                return False
             raise RuntimeError(
                 f"command '{' '.join(command)}' returned non-zero exit status {returncode}:\n{result.stderr}"
             )
