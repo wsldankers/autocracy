@@ -1,7 +1,7 @@
 from pathlib import Path
 from subprocess import run
 from inspect import currentframe
-from typing import Optional, Union, Sequence, TYPE_CHECKING
+from typing import Optional, Union, Sequence, Any, TYPE_CHECKING
 from abc import ABC, abstractmethod
 from subprocess import run
 
@@ -87,7 +87,7 @@ class Decree:
         )
         self.applied = True
 
-    def _update(self):
+    def _update(self) -> Any: # Optional[Literal[NotImplemented]]
         return NotImplemented
 
     def _activate(self):

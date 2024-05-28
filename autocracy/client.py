@@ -108,7 +108,7 @@ class Client(Initializer):
             async for blob in self.rpc:
                 filename = pending_files.popleft()
                 files[Path(filename)] = blob
-                warn(f"client got data for file {filename!r}")
+                # warn(f"client got data for file {filename!r}")
         finally:
             fact_collector_task.cancel()
             try:

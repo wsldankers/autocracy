@@ -1,10 +1,11 @@
 from configparser import ConfigParser
-from collections.abc import Mapping, Iterable
-from io import StringIO
+from collections.abc import Mapping, Iterable, Reversible
+from io import IOBase, StringIO
 from lxml.etree import Element, _Element, ElementTree
 from json import dumps
 from re import compile as regcomp
 from os import linesep
+from typing import Optional, Callable
 
 
 class INI(ConfigParser):
@@ -27,73 +28,83 @@ _newline_split = regcomp(r'\r?\n').split
 
 
 class KeyValue(dict):
-    def __init__(
-        self,
-        *args,
-        newline=None,
-        key_separator=' = ',
-        value_separator=' ',
-        continuation_indent="\t",
-    ):
-        super().__init__(*args)
-        self.newline = newline
-        self.key_separator = key_separator
-        self.value_separator = value_separator
-        self.continuation_indent = continuation_indent
+    newline = linesep
+    key_separator = ' = '
+    value_separator: Optional[str] = ' '
+    continuation_indent = "\t"
+    buffer_io_class: Callable[[], IOBase] = StringIO
+
+    print = print
+
+    def print_empty_value(self, fh: IOBase, key: str) -> None:
+        self.print(key, end=self.newline, file=fh)
+
+    def print_single_value(self, fh: IOBase, key: str, value: str) -> None:
+        iterator = iter(_newline_split(value))
+
+        newline = self.newline
+        self.print(
+            key, self.key_separator, next(iterator), sep='', end=newline, file=fh
+        )
+        continuation_indent = self.continuation_indent
+        for line in iterator:
+            print(continuation_indent, line, sep='', end=newline, file=fh)
+
+    def print_value(self, fh, key, value) -> None:
+        if value is None:
+            self.print_empty_value(fh, key)
+        elif isinstance(value, Iterable) and not isinstance(value, str):
+            self.print_list_value(fh, key, value)
+        else:
+            self.print_single_value(fh, key, str(value))
+
+    def print_list_value(self, fh, key, values) -> None:
+        if not isinstance(values, Reversible):
+            # If it's not reversible it probably doesn't have a defined order.
+            # We need the process to be deterministic though, to prevent
+            # edict.updated from becoming true spuriously.
+            values = sorted(values)
+        value_separator = self.value_separator
+        if value_separator is None:
+            for value in values:
+                self.print_value(fh, key, value)
+        else:
+            self.print_single_value(fh, key, value_separator.join(values))
+
+    def print_start_section(self, fh, name) -> None:
+        newline = self.newline
+        if fh.tell():
+            print(end=newline, file=fh)
+        print(f"[{name}]", end=newline, file=fh)
+
+    def print_end_section(self, fh, name) -> None:
+        pass
+
+    def print_section(self, fh, name, section) -> None:
+        for key, value in section.items():
+            self.print_value(fh, key, value)
 
     def __str__(self):
-        newline = self.newline
-        if newline is None:
-            newline = linesep
-        key_separator = self.key_separator
-        value_separator = self.value_separator
-        continuation_indent = self.continuation_indent
-
-        with StringIO() as fh:
-
-            def write_key_value(key, value):
-                if value is None:
-                    print(key, end=newline, file=fh)
-                else:
-                    if not isinstance(value, str):
-                        if isinstance(value, Iterable):
-                            if value_separator is None:
-                                for v in value:
-                                    write_key_value(key, v)
-                                return
-                            value = value_separator.join(value)
-                        else:
-                            value = str(value)
-
-                    iterator = iter(_newline_split(value))
-
-                    print(
-                        key, key_separator, next(iterator), sep='', end=newline, file=fh
-                    )
-                    for line in iterator:
-                        print(
-                            continuation_indent,
-                            next(iterator),
-                            sep='',
-                            end=newline,
-                            file=fh,
-                        )
+        with self.buffer_io_class() as fh:
 
             sections = []
             for key, value in self.items():
                 if isinstance(value, Mapping):
                     sections.append((key, value))
                 else:
-                    write_key_value(key, value)
+                    self.print_value(fh, key, value)
 
             for name, section in sections:
-                if fh.tell():
-                    print("", end=newline, file=fh)
-                print(f"[{name}]", end=newline, file=fh)
-                for key, value in section.items():
-                    write_key_value(key, value)
+                self.print_start_section(fh, name)
+                self.print_section(fh, name, section)
+                self.print_end_section(fh, name)
 
             return fh.getvalue()
+
+
+class SystemdUnit(KeyValue):
+    key_separator = '='
+    value_separator = None
 
 
 class XML(list):

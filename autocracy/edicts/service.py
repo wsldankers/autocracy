@@ -32,7 +32,7 @@ class Service(Initializer, Decree):
                 "{self.name}: deactivated units can't be reloaded or restarted"
             )
 
-    def _systemctl_is_enabled(self):
+    def _systemctl_is_enabled(self) -> str:
         command = ['systemctl', 'is-enabled', self.unit]
         result = run(command, capture_output=True, text=True, stdin=DEVNULL)
 
@@ -41,12 +41,25 @@ class Service(Initializer, Decree):
         if not enabled and returncode:
             if returncode == 1:
                 # Assume the unit doesn't exist:
-                return False
+                return 'disabled'
             raise RuntimeError(
                 f"command '{' '.join(command)}' returned non-zero exit status {returncode}:\n{result.stderr}"
             )
 
         return enabled
+
+    def _systemctl_is_active(self) -> bool:
+        command = ['systemctl', 'is-active', '--quiet', self.unit]
+        result = run(command, capture_output=True, text=True, stdin=DEVNULL)
+        returncode = result.returncode
+        if returncode == 0:
+            return True
+        elif returncode == 3:
+            return False
+        else:
+            raise RuntimeError(
+                f"command '{' '.join(command)}' returned non-zero exit status {returncode}:\n{result.stderr}"
+            )
 
     @property
     def _needs_update(self) -> bool:
@@ -68,28 +81,21 @@ class Service(Initializer, Decree):
 
         active = self.active
         if active is not None:
-            command = ['systemctl', 'is-active', '--quiet', unit]
-            result = run(command, capture_output=True, text=True, stdin=DEVNULL)
-            returncode = result.returncode
-            if returncode == 0:
+            if self._systemctl_is_active():
                 self._was_active = True
                 if not active:
                     self._change_active = False
-            elif returncode == 3:
+            else:
                 if active:
                     self._change_active = True
-            else:
-                raise RuntimeError(
-                    f"command '{' '.join(command)}' returned non-zero exit status {returncode}:\n{result.stderr}"
-                )
 
         return bool(self._change_enable or self._change_active or self._change_mask)
 
     def _update(self) -> None:
         unit = self.unit
 
-        change_active = self._change_active
         change_mask = self._change_mask
+        change_enable = self._change_enable
         if change_mask is not None:
             command = ['systemctl']
             if change_mask:
@@ -103,16 +109,14 @@ class Service(Initializer, Decree):
             # extra info:
             if (
                 not change_mask
-                and change_active
-                and (self.reload or self.restart)
-                and self._systemctl_is_enabled() == 'active'
+                and change_enable
+                and self._systemctl_is_enabled() == 'enabled'
             ):
-                # It turned out to be active already, after unmasking
-                change_active = None
-                self._change_active = None
-                self._was_active = True
+                # It turned out to be enabled already, after unmasking
+                change_enable = None
+                self._change_enable = None
 
-        change_enable = self._change_enable
+        change_active = self._change_active
         if change_enable is not None or change_active is not None:
             command = ['systemctl']
             if change_enable is not None:
