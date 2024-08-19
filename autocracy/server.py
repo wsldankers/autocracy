@@ -149,12 +149,14 @@ class Admin(BaseClient):
         else:
             targets = clients.values()
 
-        return [dict(
-            zip(
-                (client.name for client in targets),
-                await asyncio.gather(*(client.apply() for client in targets)),
+        return [
+            dict(
+                zip(
+                    (client.name for client in targets),
+                    await asyncio.gather(*(client.apply() for client in targets)),
+                )
             )
-        )]
+        ]
 
     async def quit(self):
         await self.server.done.set_result(None)
@@ -220,7 +222,9 @@ class Client(BaseClient):
         for file, (_, st) in repository_files.items():
             remotely_known_files[file] = st
 
-        return await rpc.remote_command('apply', name)
+        (update_needed,) = await rpc.remote_command('apply', name)
+
+        return update_needed
 
     async def __call__(self) -> None:
         name = self.name
