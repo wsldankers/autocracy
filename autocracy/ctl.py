@@ -3,6 +3,7 @@ import aiohttp.web
 from os import getenv
 from itertools import chain
 from sys import stdout
+from json import dump as dump_json
 
 # try:
 #     from yaml import dump as dump_yaml, representer, add_representer
@@ -32,32 +33,31 @@ from .rpc import RPC
 from .utils import warn
 
 
-def ghetto_yaml(o, _indent="", _nested=False):
-    if isinstance(o, dict):
-        if o:
-            if _nested:
-                print()
-        else:
-            print(_indent, "{}")
-
+def ghetto_yaml(o, _indent="", _sep=''):
+    if isinstance(o, dict) and len(o):
+        if _sep:
+            print()
         for key, value in o.items():
-            print(_indent, key, ": ", sep="", end="")
-            ghetto_yaml(value, _indent if isinstance(value, list) else _indent + "  ", _nested=True)
-    elif isinstance(o, list):
-        if o:
-            if _nested:
-                print()
-        else:
-            print(_indent, "[]")
+            print(_indent, key, ":", sep="", end="")
+            ghetto_yaml(
+                value,
+                _indent if isinstance(value, list) else _indent + "  ",
+                _sep=" ",
+            )
+    elif isinstance(o, list) and len(o):
+        if _sep:
+            print()
         for value in o:
-            print(_indent, "- ", sep="", end="")
-            ghetto_yaml(value, _indent + "  ", _nested=True)
-    elif _nested and isinstance(o, str) and "\n" in o:
-        print("|")
+            print(_indent, "-", sep="", end="")
+            ghetto_yaml(value, _indent + "  ", _sep=" ")
+    elif isinstance(o, str) and _sep and "\n" in o:
+        print(_sep, "|", sep="")
         for line in o.splitlines():
             print(_indent, line, sep="")
     else:
-        print(repr(o))
+        print(_sep, end="")
+        dump_json(o, stdout)
+        print()
 
 
 async def main(procname, *args, **env):
