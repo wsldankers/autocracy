@@ -68,8 +68,7 @@ class Repository(BaseRepository):
         files = self.files
         result: dict[str, bytes] = {}
         for parent, _, file_entries, dir_fd in fwalk(
-            root / normalized_path,
-            onerror=throw,
+            root / normalized_path, onerror=throw
         ):
             parent_path = Path(parent).relative_to(root)
 
@@ -150,7 +149,12 @@ class Admin(BaseClient):
         else:
             targets = clients.values()
 
-        await asyncio.gather(*(client.apply() for client in targets))
+        return [dict(
+            zip(
+                (client.name for client in targets),
+                await asyncio.gather(*(client.apply() for client in targets)),
+            )
+        )]
 
     async def quit(self):
         await self.server.done.set_result(None)
@@ -167,10 +171,7 @@ class Client(BaseClient):
 
     @weakproperty
     def rpc(self) -> RPC:
-        return RPC(
-            self.ws,
-            facts=self.accept_facts,
-        )
+        return RPC(self.ws, facts=self.accept_facts)
 
     @initializer
     def remotely_known_files(self) -> dict[str, stat_result]:
@@ -219,7 +220,7 @@ class Client(BaseClient):
         for file, (_, st) in repository_files.items():
             remotely_known_files[file] = st
 
-        await rpc.remote_command('apply', name, rsvp=False)
+        return await rpc.remote_command('apply', name)
 
     async def __call__(self) -> None:
         name = self.name
@@ -290,9 +291,7 @@ class Server(Initializer):
             )
             if len(commonNames) != 1:
                 names = sorted(commonNames)
-                warn(
-                    f"confusing client certificate: {names=}",
-                )
+                warn(f"confusing client certificate: {names=}")
                 return web.Response(status=403)
             (commonName,) = commonNames
             warn(f"got connection from {commonName}")
@@ -385,12 +384,7 @@ async def main(procname, config_file, *args, **env):
             setresuid(uid, uid, uid)
 
             environ.update(
-                dict(
-                    USER=name,
-                    LOGNAME=name,
-                    HOME=pw.pw_dir,
-                    SHELL=pw.pw_shell,
-                )
+                dict(USER=name, LOGNAME=name, HOME=pw.pw_dir, SHELL=pw.pw_shell)
             )
 
     await server()

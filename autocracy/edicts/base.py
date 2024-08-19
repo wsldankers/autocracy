@@ -25,18 +25,18 @@ class BaseRepository(ABC, Initializer):
 
 
 class Decree:
-    only_if = True
+    activate_if = True
     name = ""
     applied = False
 
     if TYPE_CHECKING:
 
         @property
-        def _needs_update(self) -> bool:
+        def _update_needed(self) -> bool:
             return False
 
     else:
-        _needs_update = False
+        _update_needed = False
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -74,24 +74,24 @@ class Decree:
 
     @property
     def _should_activate(self):
-        return call_if_callable(self.only_if)
+        return call_if_callable(self.activate_if)
 
-    def _apply(self):
+    def _apply(self, dry_run=False):
         if self.applied:
             raise RuntimeError(f"{self}: refused attempt to run twice")
-        # warn(f"{self}: updating")
-        self.updated = self._needs_update and self._update() is not NotImplemented
-        # warn(f"{self}: activating")
-        self.activated = (
-            self._should_activate and self._activate() is not NotImplemented
-        )
-        self.applied = True
-
-    def _update(self) -> Any: # Optional[Literal[NotImplemented]]
-        return NotImplemented
-
-    def _activate(self):
-        return NotImplemented
+        try:
+            self.updated = (
+                self._update_needed
+                and hasattr(self, '_update')
+                and (dry_run or self._update())
+            )
+            self.activated = (
+                self._should_activate
+                and hasattr(self, '_activate')
+                and (dry_run or self._activate())
+            )
+        finally:
+            self.applied = True
 
     def __str__(self):
         name = self.name
@@ -138,10 +138,24 @@ class Group(Initializer, Decree):
     def activated(self):
         return any(decree.activated for decree in self._decrees)
 
-    def _apply(self):
-        for decree in self._decrees:
-            decree._apply()
-        self.applied = True
+    @initializer
+    def _update_needed(self):
+        return {
+            name: update
+            for name, update in (
+                (decree.name, decree._update_needed) for decree in self._decrees
+            )
+            if update
+        }
+
+    def _apply(self, *args, **kwargs):
+        if self.applied:
+            raise RuntimeError(f"{self}: refused attempt to run twice")
+        try:
+            for decree in self._decrees:
+                decree._apply(*args, **kwargs)
+        finally:
+            self.applied = True
 
     # To appease mypy:
     def __getattr__(self, name: str) -> Decree:

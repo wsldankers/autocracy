@@ -7,6 +7,8 @@ from typing import (
     Callable,
     Optional,
     Union,
+    Iterable,
+    Iterator,
     cast,
     TYPE_CHECKING,
 )
@@ -16,6 +18,9 @@ from functools import wraps
 from weakref import ref as weakref
 from collections.abc import KeysView, Mapping
 from os.path import commonprefix
+from re import compile as regcomp, ASCII
+from datetime import datetime, timezone
+from difflib import unified_diff
 
 
 class Initializer:
@@ -198,6 +203,68 @@ def frozendict(*args, **kwargs) -> MappingProxyType:
     return MappingProxyType(dict(*args, **kwargs))
 
 
+def _isoformat(timestamp: int) -> str:
+    return (
+        datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        .replace(tzinfo=None)
+        .isoformat()
+    )
+
+
+def isoformat(timestamp: int) -> str:
+    return f"{_isoformat(timestamp)}Z"
+
+
+def isoformat_ns(timestamp: int) -> str:
+    return f"{_isoformat(timestamp // 1000000000)}.{timestamp % 1000000000:09d}Z"
+
+
+def split_on_newlines(text: str, sep: str = "\n") -> list[str]:
+    # because str.splitlines() happily splits on all sorts of ascii/unicode vagary.
+
+    lines = text.split(sep=sep)
+    for i in range(len(lines) - 1):
+        lines[i] = lines[i] + "\n"
+    if lines[-1] == "":
+        lines.pop()
+    return lines
+
+
+def diff_fix_newlines(iterator: Iterable[str]) -> Iterator:
+    for line in iterator:
+        if line.endswith("\n"):
+            yield line
+        else:
+            yield line + "\n"
+            yield "\\ No newline at end of file\n"
+
+
+def string_diff(
+    a: str,
+    b: str,
+    fromfile: str = '',
+    tofile: str = '',
+    fromfiledate: str = '',
+    tofiledate: str = '',
+    n: int = 3,
+    lineterm: str = "\n",
+) -> str:
+    return ''.join(
+        diff_fix_newlines(
+            unified_diff(
+                split_on_newlines(a, sep=lineterm),
+                split_on_newlines(b, sep=lineterm),
+                fromfile=fromfile,
+                tofile=tofile,
+                fromfiledate=fromfiledate,
+                tofiledate=tofiledate,
+                n=n,
+                lineterm=lineterm,
+            )
+        )
+    )
+
+
 def get_file(*args, **kwargs):
     with open(*args, **kwargs) as fh:
         return fh.read()
@@ -266,9 +333,46 @@ def normalize_path(path):
     return Path(*parts)
 
 
+_version_split = regcomp(r'([0-9]+)', ASCII).split
+
+
+def parse_version(s: str) -> tuple[Union[str, int], ...]:
+    """
+    Parse a version string into a tuple with alternating string and integer elements.
+
+    This function takes a version string typically used to denote software versions,
+    and splits it into a tuple. Each numeric segment in the version string is
+    parsed into an integer. Non-numeric characters or segments are left as strings.
+    All odd items are integers, all others are strings.
+
+    This format allows for easy comparison of version numbers when used as the key
+    argument to sorting functions.
+
+    Parameters:
+    s (str): A version string to be parsed.
+
+    Returns:
+    tuple: A tuple containing integers and strings, representing the parsed version.
+
+    Examples:
+    >>> parse_version('1.2.3')
+    ('', 1, '.', 2, '.', 3, '')
+    >>> parse_version('v1.2.3a')
+    ('v', 1, '.', 2, '.', 3, 'a')
+
+    Usage:
+    To sort a list of version strings, use this function as the key parameter:
+    >>> versions = ['1.2.3', '1.2.10', '1.2.2']
+    >>> sorted(versions, key=parse_version)
+    ['1.2.2', '1.2.3', '1.2.10']
+    """
+
+    return tuple(int(c) if i & 1 else c for i, c in enumerate(_version_split(s)))
+
+
 class Ghost:
-    """A convenience object that tries to be as inoffensive and easygoing as
-    possible, returning a neutral answer from each operation you might try
+    """A convenience object that tries to be as inconspicuous and easygoing as
+    possible, returning a neutral answer for each operation you might try
     to perform on it."""
 
     __slots__ = ('__weakref__',)
@@ -640,6 +744,11 @@ __all__ = (
     'is_byteslike',
     'is_false',
     'is_true',
+    'isoformat',
+    'isoformat_ns',
+    'split_on_newlines',
+    'diff_fix_newlines',
+    'string_diff',
     'frozendict',
     'normalize_path',
     'put_file',

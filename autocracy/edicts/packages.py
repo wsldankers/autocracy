@@ -20,7 +20,7 @@ class Packages(Initializer, Decree):
     _remove: Set[str]
 
     @property
-    def _needs_update(self) -> bool:
+    def _update_needed(self) -> bool:
         result = run(
             ['dpkg', '--print-architecture'],
             capture_output=True,
@@ -75,7 +75,13 @@ class Packages(Initializer, Decree):
         self._install = install
         self._remove = remove
 
-        return bool(install or remove)
+        report = {}
+        if install:
+            report['install'] = sorted(install)
+        if remove:
+            report['remove'] = sorted(remove)
+
+        return report
 
     def _update(self) -> None:
         install = self._install

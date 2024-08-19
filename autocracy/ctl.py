@@ -2,6 +2,8 @@ import asyncio
 import aiohttp.web
 from os import getenv
 from itertools import chain
+from json import dump
+from sys import stdout
 
 from .rpc import RPC
 from .utils import warn
@@ -21,7 +23,7 @@ async def main(procname, *args, **env):
 
             async def run_command():
                 for x in await rpc.remote_command(*args):
-                    print(x)
+                    dump(x, stdout, indent=2)
 
             async def rpc_loop():
                 async for _ in rpc:

@@ -12,7 +12,7 @@ foo = File(
 bar = File(
     target='/tmp/bar',
     contents="Hello world?\n",
-    only_if=lambda: foo.updated,
+    activate_if=lambda: foo.updated,
 )
 
 factsfile = File(
@@ -43,6 +43,6 @@ grp = Group(
     file2=File(target='/tmp/2', contents="2\n"),
 )
 
-ls = Run(command='date', only_if=lambda: grp.updated)
+ls = Run(command='date', activate_if=lambda: grp.updated)
 
 grp.file3 = File(target='/tmp/3', contents="3\n")

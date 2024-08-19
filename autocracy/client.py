@@ -6,7 +6,7 @@ from ssl import create_default_context, Purpose, TLSVersion
 from collections import deque
 from typing import Optional, Any, Union
 from sys import setswitchinterval
-from traceback import print_exc
+from traceback import print_exc, format_exc
 
 from .common import load_config, load_policy
 from .edicts.base import BaseRepository
@@ -58,16 +58,21 @@ class Client(Initializer):
     def max_facts_interval(self) -> int:
         return self.config.get('max_facts_interval', 60)
 
-    async def apply(self, name) -> None:
+    @initializer
+    def dry_run(self) -> bool:
+        return self.config.get('dry_run', True)
+
+    async def apply(self, name, dry_run=False) -> None:
         repository = Repository(files=self.files)
 
         facts = Object(self.facts or {})
         policy = load_policy(repository.get_file, name, facts=facts)
         policy._provision(repository)
         try:
-            await asyncio.to_thread(policy._apply)
+            await asyncio.to_thread(policy._apply, dry_run=dry_run or self.dry_run)
+            return [policy._update_needed]
         except Exception:
-            print_exc()
+            return [{'error': format_exc()}]
 
     async def accept_files(self, *filenames) -> None:
         self.pending_files.extend(filenames)

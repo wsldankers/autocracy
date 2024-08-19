@@ -62,7 +62,7 @@ class Service(Initializer, Decree):
             )
 
     @property
-    def _needs_update(self) -> bool:
+    def _update_needed(self) -> bool:
         unit = self.unit
         enable = self.enable
         mask = self.mask
@@ -89,7 +89,16 @@ class Service(Initializer, Decree):
                 if active:
                     self._change_active = True
 
-        return bool(self._change_enable or self._change_active or self._change_mask)
+        report = {}
+
+        if self._change_enable:
+            report['enable'] = bool(enable)
+        if self._change_active:
+            report['active'] = bool(active)
+        if self._change_mask:
+            report['mask'] = bool(mask)
+
+        return report
 
     def _update(self) -> None:
         unit = self.unit

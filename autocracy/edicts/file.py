@@ -15,17 +15,18 @@ from os import (
     F_OK,
 )
 from pwd import getpwnam, getpwuid
-from grp import getgrnam
+from grp import getgrnam, getgrgid
 from stat import S_IMODE, S_ISLNK, S_ISDIR
 from errno import ENOTEMPTY
 from shutil import rmtree
+from difflib import unified_diff
 
 from ..utils import *
 from .base import Decree, BaseRepository
 
 
 class _FileHandlingAction:
-    __slots__ = ('target', 'create', 'chown', 'chmod', 'contents')
+    __slots__ = ('target', 'create', 'chown', 'chmod', 'contents', 'report')
 
     target: Union[Path, str]
     # create is just informational but used to see if parent directories
@@ -34,6 +35,8 @@ class _FileHandlingAction:
     chown: Optional[tuple[int, int]]
     chmod: Optional[int]
     contents: Optional[bytes]
+
+    report: dict
 
     def __bool__(self):
         return (
@@ -125,6 +128,7 @@ class _FileHandlingMixin:
         mode = self._mode
         action = _FileHandlingAction()
         action.target = target
+        report = {}
         try:
             with open(target, 'rb') as fh:
                 st = stat(fh.fileno())
@@ -134,6 +138,7 @@ class _FileHandlingMixin:
             needs_chown = uid is not None or gid is not None
             needs_chmod = mode is not None
             needs_contents = True
+            old_contents = b''
         else:
             action.create = False
             needs_chown = (uid is not None and st.st_uid != uid) or (
@@ -143,19 +148,61 @@ class _FileHandlingMixin:
             needs_contents = old_contents != new_contents
 
         if needs_chown:
+            if uid is not None:
+                owner_report = {'new': getpwuid(uid).pw_name}
+                if not action.create:
+                    owner_report['old'] = getpwuid(st.st_uid).pw_name
+                report['owner'] = owner_report
+
+            if gid is not None:
+                group_report = {'new': getgrgid(gid).gr_name}
+                if not action.create:
+                    group_report['old'] = getgrgid(st.st_gid).gr_name
+                report['group'] = group_report
+
             action.chown = (-1 if uid is None else uid, -1 if gid is None else gid)
         else:
             action.chown = None
 
         if needs_chmod:
+            mode_report = {'new': mode}
+            if not action.create:
+                mode_report['old'] = S_IMODE(st.st_mode)
+            report['mode'] = mode_report
+
             action.chmod = mode
         else:
             action.chmod = None
 
         if needs_contents:
             action.contents = new_contents
+            if b'\0' in old_contents or b'\0' in new_contents:
+                diff = "binary files differ"
+            else:
+                try:
+                    old_string_contents = str(old_contents, encoding='UTF-8')
+                    new_string_contents = str(new_contents, encoding='UTF-8')
+                except UnicodeDecodeError:
+                    diff = "non-UTF-8 files differ"
+                else:
+                    # warn(f"{target}: {old_contents!r} {new_contents!r}")
+                    diff = (
+                        string_diff(
+                            old_string_contents,
+                            new_string_contents,
+                            fromfile=target,
+                            tofile=target,
+                            fromfiledate=(
+                                '' if action.create else isoformat_ns(st.st_mtime_ns)
+                            ),
+                        )
+                        or "empty file"
+                    )
+            report['contents'] = diff
         else:
             action.contents = None
+
+        action.report = report
 
         return action
 
@@ -213,12 +260,12 @@ class File(Initializer, _FileHandlingMixin, Decree):
 
         return str(contents).encode('UTF-8')
 
-    @property
-    def _needs_update(self):
+    @initializer
+    def _update_needed(self):
         target = self.target
         action = self._check_file(self.target, self._computed_contents)
         self._action = action
-        return bool(action)
+        return action.report
 
     def _update(self):
         print(f"{self.name}: running")
@@ -262,7 +309,7 @@ class RecursiveFiles(Initializer, _FileHandlingMixin, Decree):
         return {Path(self.target).parent}
 
     @property
-    def _needs_update(self) -> bool:
+    def _update_needed(self) -> bool:
         source_str = self.source
         if source_str is None:
             return False
@@ -326,7 +373,7 @@ class Symlink(Initializer, Decree):
         return _parse_owner(self.owner)
 
     @property
-    def _needs_update(self) -> bool:
+    def _update_needed(self) -> bool:
         target = self.target
         uid, gid = self._owner
         try:
@@ -397,7 +444,7 @@ class Directory(Initializer, Decree):
         return _parse_mode(self.mode)
 
     @property
-    def _needs_update(self) -> bool:
+    def _update_needed(self) -> bool:
         target = self.target
         uid, gid = self._owner
         mode = self._mode
@@ -467,7 +514,7 @@ class Permissions(Initializer, Decree):
         return _parse_mode(self.mode)
 
     @property
-    def _needs_update(self) -> bool:
+    def _update_needed(self) -> bool:
         target = self.target
         uid, gid = self._owner
         mode = self._mode
@@ -507,7 +554,7 @@ class Delete(Initializer, Decree):
     force = False
 
     @property
-    def _needs_update(self) -> bool:
+    def _update_needed(self) -> bool:
         return access(self.target, F_OK)
 
     def _update(self) -> None:

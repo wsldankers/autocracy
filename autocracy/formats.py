@@ -6,6 +6,7 @@ from json import dumps
 from re import compile as regcomp
 from os import linesep
 from typing import Optional, Callable
+from shlex import quote as quote_shell
 
 
 class INI(ConfigParser):
@@ -36,16 +37,17 @@ class KeyValue(dict):
 
     print = print
 
+    def newline_split(self, value):
+        return _newline_split(value)
+
     def print_empty_value(self, fh: IOBase, key: str) -> None:
         self.print(key, end=self.newline, file=fh)
 
     def print_single_value(self, fh: IOBase, key: str, value: str) -> None:
-        iterator = iter(_newline_split(value))
+        iterator = iter(self.newline_split(value))
 
         newline = self.newline
-        self.print(
-            key, self.key_separator, next(iterator), sep='', end=newline, file=fh
-        )
+        self.print(key, next(iterator), sep=self.key_separator, end=newline, file=fh)
         continuation_indent = self.continuation_indent
         for line in iterator:
             print(continuation_indent, line, sep='', end=newline, file=fh)
@@ -86,7 +88,6 @@ class KeyValue(dict):
 
     def __str__(self):
         with self.buffer_io_class() as fh:
-
             sections = []
             for key, value in self.items():
                 if isinstance(value, Mapping):
@@ -105,6 +106,34 @@ class KeyValue(dict):
 class SystemdUnit(KeyValue):
     key_separator = '='
     value_separator = None
+
+
+class ResolvConf(KeyValue):
+    key_separator = ' '
+    value_separator = None
+
+
+class ShellEnv(KeyValue):
+    key_separator = '='
+    continuation_indent = ''
+
+    def print_single_value(self, fh: IOBase, key: str, value: str) -> None:
+        self.print(
+            key,
+            quote_shell(value),
+            sep=self.key_separator,
+            end=self.newline,
+            file=fh,
+        )
+
+
+class SshConfig(KeyValue):
+    key_separator = ' '
+    value_separator = None
+
+
+class SshdConfig(SshConfig):
+    pass
 
 
 class XML(list):
