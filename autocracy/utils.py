@@ -1,26 +1,27 @@
-from pathlib import Path, PurePath
-from functools import update_wrapper
-from typing import (
-    Iterable,
-    Any,
-    TypeVar,
-    Callable,
-    Optional,
-    Union,
-    Iterable,
-    Iterator,
-    cast,
-    TYPE_CHECKING,
-)
-from sys import stderr
-from types import MappingProxyType
-from functools import wraps
-from weakref import ref as weakref
+from asyncio import get_running_loop, wait
+from asyncio.coroutines import iscoroutine
 from collections.abc import KeysView, Mapping
-from os.path import commonprefix
-from re import compile as regcomp, ASCII
 from datetime import datetime, timezone
 from difflib import unified_diff
+from functools import update_wrapper, wraps
+from os.path import commonprefix
+from pathlib import Path, PurePath
+from re import ASCII, compile as regcomp
+from sys import stderr
+from types import MappingProxyType
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Awaitable,
+    Callable,
+    Iterable,
+    Iterator,
+    Optional,
+    TypeVar,
+    Union,
+    cast,
+)
+from weakref import ref as weakref
 
 
 class Initializer:
@@ -201,6 +202,25 @@ def frozendict(*args, **kwargs) -> MappingProxyType:
         if isinstance(arg, Mapping):
             return MappingProxyType(arg)
     return MappingProxyType(dict(*args, **kwargs))
+
+
+async def _result_or_exception(awaitable: Awaitable):
+    try:
+        return await awaitable
+    except Exception as e:
+        return e
+
+
+async def parallel(awaitables: Iterable[Awaitable]) -> list:
+    create_task = get_running_loop().create_task
+    as_list = [
+        create_task(awaitable) if iscoroutine(awaitable) else awaitable
+        for awaitable in awaitables
+    ]
+    if not as_list:
+        return []
+    await wait(as_list)
+    return [await _result_or_exception(awaitable) for awaitable in as_list]
 
 
 def _isoformat(timestamp: int) -> str:
