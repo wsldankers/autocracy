@@ -1,9 +1,13 @@
 import asyncio
-import aiohttp.web
-from os import getenv
 from itertools import chain
-from sys import stdout
 from json import dump as dump_json
+from os import getenv
+from sys import stdout
+
+import aiohttp.web
+
+from .rpc import RPC
+from .utils import warn
 
 # try:
 #     from yaml import dump as dump_yaml, representer, add_representer
@@ -28,9 +32,6 @@ from json import dump as dump_json
 
 #     def dump(o):
 #         dump_yaml(o, stdout, Dumper=MyDumper)
-
-from .rpc import RPC
-from .utils import warn
 
 
 def ghetto_yaml(o, _indent="", _sep=''):

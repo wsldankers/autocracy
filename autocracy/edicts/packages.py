@@ -1,8 +1,7 @@
-from subprocess import run
-from typing import Optional
-from collections.abc import Iterable, Mapping, Set
-from subprocess import run, DEVNULL
+from collections.abc import Mapping, Set
 from os import environ
+from subprocess import DEVNULL, run
+from typing import Optional
 
 from ..utils import *
 from .base import Decree

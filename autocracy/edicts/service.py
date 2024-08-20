@@ -1,6 +1,5 @@
-from subprocess import run
+from subprocess import DEVNULL, run
 from typing import Optional
-from subprocess import run, DEVNULL
 
 from ..utils import *
 from .base import Decree

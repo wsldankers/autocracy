@@ -4,6 +4,6 @@
 # require('standard') # includes standard.py, does not fail if included before
 #
 # File(
-#	destination='/etc/motd',
-#	contents="Hello, world!\n",
+# 	destination='/etc/motd',
+# 	contents="Hello, world!\n",
 # )

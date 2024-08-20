@@ -1,8 +1,8 @@
 #! /usr/bin/python3
 
-from sys import argv, exit
-from os import environ
 from asyncio import run
+from os import environ
+from sys import argv, exit
 
 from autocracy.ctl import main
 

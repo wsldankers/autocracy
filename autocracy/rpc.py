@@ -21,11 +21,12 @@ Send an answer indicating failure to the previous command:
 """
 
 import asyncio
+from itertools import count
+from traceback import format_exc
+from typing import Callable
+
 import aiohttp
 import aiohttp.web as web
-from typing import Callable
-from traceback import format_exc
-from itertools import count
 
 from .utils import Initializer, initializer, warn
 

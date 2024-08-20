@@ -21,9 +21,8 @@ behavior if these side effects affect the HeapMap.
 This implementation keeps the heap consistent even if the comparison
 functions of the items throw an exception."""
 
-from collections.abc import MutableMapping, ValuesView, ItemsView
 from abc import abstractmethod
-
+from collections.abc import ItemsView, MutableMapping, ValuesView
 
 __all__ = ['MinHeapMap', 'MaxHeapMap']
 

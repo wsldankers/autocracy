@@ -1,17 +1,12 @@
-from psutil import (
-    net_if_addrs,
-    cpu_count,
-    cpu_freq,
-    virtual_memory,
-    swap_memory,
-)
-from ipaddress import ip_address
-from decimal import Decimal
 from collections import defaultdict
-from socket import gethostname, getaddrinfo, AI_CANONNAME, AF_INET, AF_INET6, AF_PACKET
-from sys import platform
+from decimal import Decimal
+from ipaddress import ip_address
 from os import uname
+from socket import AF_INET, AF_INET6, AF_PACKET, AI_CANONNAME, getaddrinfo, gethostname
+from sys import platform
 from typing import Any
+
+from psutil import cpu_count, cpu_freq, net_if_addrs, swap_memory, virtual_memory
 
 from .utils import get_file
 

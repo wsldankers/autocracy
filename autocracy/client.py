@@ -1,17 +1,18 @@
 import asyncio
-import aiohttp.web
+from collections import deque
 from os import umask
 from pathlib import Path
-from ssl import create_default_context, Purpose, TLSVersion
-from collections import deque
-from typing import Optional, Any, Union
+from ssl import Purpose, TLSVersion, create_default_context
 from sys import setswitchinterval
-from traceback import print_exc, format_exc
+from traceback import format_exc
+from typing import Any, Optional, Union
+
+import aiohttp.web
 
 from .common import load_config, load_policy
 from .edicts.base import BaseRepository
-from .rpc import RPC, immediate
 from .facts import get_facts
+from .rpc import RPC, immediate
 from .utils import *
 
 web = aiohttp.web

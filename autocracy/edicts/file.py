@@ -1,28 +1,27 @@
-from pathlib import Path
-from typing import MutableMapping, Optional, Union, cast
-from types import MappingProxyType
+from errno import ENOTEMPTY
+from grp import getgrgid, getgrnam
 from os import (
-    mkdir,
-    stat,
-    chown,
+    F_OK,
+    access,
     chmod,
+    chown,
+    mkdir,
     open as os_open,
     readlink,
     rmdir,
-    unlink,
+    stat,
     symlink,
-    access,
-    F_OK,
+    unlink,
 )
+from pathlib import Path
 from pwd import getpwnam, getpwuid
-from grp import getgrnam, getgrgid
-from stat import S_IMODE, S_ISLNK, S_ISDIR
-from errno import ENOTEMPTY
 from shutil import rmtree
-from difflib import unified_diff
+from stat import S_IMODE, S_ISDIR, S_ISLNK
+from types import MappingProxyType
+from typing import MutableMapping, Optional, Union, cast
 
 from ..utils import *
-from .base import Decree, BaseRepository
+from .base import BaseRepository, Decree
 
 
 class _FileHandlingAction:

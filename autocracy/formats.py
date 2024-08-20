@@ -1,12 +1,13 @@
+from collections.abc import Iterable, Mapping, Reversible
 from configparser import ConfigParser
-from collections.abc import Mapping, Iterable, Reversible
 from io import IOBase, StringIO
-from lxml.etree import Element, _Element, ElementTree
 from json import dumps
-from re import compile as regcomp
 from os import linesep
-from typing import Optional, Callable
+from re import compile as regcomp
 from shlex import quote as quote_shell
+from typing import Callable, Optional
+
+from lxml.etree import Element, ElementTree, _Element
 
 
 class INI(ConfigParser):

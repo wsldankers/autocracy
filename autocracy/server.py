@@ -1,34 +1,33 @@
 import asyncio
-import aiohttp.web
-from typing import Optional, Iterable, Union
 from os import (
-    stat,
-    geteuid,
+    environ,
     fwalk,
-    open as os_open,
-    stat_result,
+    geteuid,
     getuid,
     initgroups,
+    open as os_open,
     setresgid,
     setresuid,
-    environ,
+    stat,
+    stat_result,
 )
-from sys import setswitchinterval
 from pathlib import Path
-from ssl import create_default_context, Purpose, TLSVersion, CERT_REQUIRED
-from struct import Struct
-from socket import SOL_SOCKET, SO_PEERCRED
-from pwd import getpwuid, getpwnam
-from weakref import ref as weakref
+from pwd import getpwnam, getpwuid
+from socket import SO_PEERCRED, SOL_SOCKET
+from ssl import CERT_REQUIRED, Purpose, TLSVersion, create_default_context
 from stat import S_ISREG
-from pwd import getpwnam
+from struct import Struct
+from sys import setswitchinterval
+from typing import Iterable, Optional, Union
+from weakref import ref as weakref
 
-from .rpc import RPC
-from .utils import *
+import aiohttp.web
+
+from .aiohttp import TCPSite, UnixSite
 from .common import load_config, load_policy, load_tags
 from .edicts.base import BaseRepository
-from .aiohttp import TCPSite, UnixSite
-
+from .rpc import RPC
+from .utils import *
 
 web = aiohttp.web
 
