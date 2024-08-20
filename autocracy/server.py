@@ -181,10 +181,10 @@ class Client(BaseClient):
 
     async def accept_facts(self, facts) -> None:
         self.facts = facts
-        await self.apply()
+        # await self.apply()
 
     async def apply(self) -> None:
-        warn("apply()")
+        # warn("apply()")
         name = self.name
 
         repository = Repository(root=self.repository_root)
@@ -268,7 +268,7 @@ class Server(Initializer):
                 await asyncio.sleep(1)
 
     async def client(self, request) -> web.StreamResponse:
-        warn("new connection")
+        # warn("new connection")
 
         # socket = request.get_extra_info('ssl_object')
         # cert_binary = socket.getpeercert(True)

@@ -99,7 +99,7 @@ class Client(Initializer):
                 if facts != previous_facts:
                     self.facts = previous_facts = facts
                     facts_sleep = 0
-                    warn("sending facts")
+                    # warn("sending facts")
                     await self.rpc.remote_command('facts', facts, rsvp=False)
             facts = None
             facts_sleep = min(facts_sleep + 1, max_facts_interval)

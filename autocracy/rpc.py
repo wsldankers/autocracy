@@ -22,12 +22,12 @@ Send an answer indicating failure to the previous command:
 
 import asyncio
 import aiohttp
+import aiohttp.web as web
 from typing import Callable
 from traceback import format_exc
+from itertools import count
 
 from .utils import Initializer, initializer, warn
-
-web = aiohttp.web
 
 
 class immediate:
@@ -47,7 +47,7 @@ class CommandError(Exception):
 class RPC(Initializer):
     ws: web.WebSocketResponse
     routes: dict[str, Callable]
-    next_cid = 0
+    next_cid = count().__next__
 
     @initializer
     def pending_commands(self):
@@ -59,10 +59,9 @@ class RPC(Initializer):
     async def remote_command(self, name, *args, rsvp=True, timeout=30):
         """timeout can be None if you want it to wait forever"""
         ws = self.ws
-        warn(f"sending command {name!r} {args=}")
+        # warn(f"sending command {name!r} {args=}")
         if rsvp:
-            cid = self.next_cid
-            self.next_cid = cid + 1
+            cid = self.next_cid()
             pending_commands = self.pending_commands
             pending_command = asyncio.get_running_loop().create_future()
             pending_commands[cid] = pending_command
