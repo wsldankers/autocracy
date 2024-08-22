@@ -1,7 +1,8 @@
 import asyncio
 from itertools import chain
-from json import dump as dump_json
+from json import dump as dump_json, dumps as dumps_json
 from os import getenv
+from re import compile as regcomp
 from sys import stdout
 
 import aiohttp.web
@@ -9,29 +10,7 @@ import aiohttp.web
 from .rpc import RPC
 from .utils import warn
 
-# try:
-#     from yaml import dump as dump_yaml, representer, add_representer
-# except ImportError:
-#     from json import dump as dump_json
-
-#     def dump(o):
-#         dump_json(o, stdout, indent=2)
-
-# else:
-#     try:
-#         from yaml import CDumper as Dumper
-#     except ImportError:
-#         from yaml import Dumper
-
-#     class MyDumper(Dumper):
-#         def represent_scalar(self, tag, data, style=None):
-#             if style is None and isinstance(data, str) and "\n" in data:
-#                 print(repr(tag), repr(data))
-#                 style = '|'
-#             return super().represent_scalar(tag, data, style)
-
-#     def dump(o):
-#         dump_yaml(o, stdout, Dumper=MyDumper)
+_isplainkey = regcomp(r'[0-9a-zA-Z_]+(?:-[0-9a-zA-Z_])*').fullmatch
 
 
 def ghetto_yaml(o, _indent="", _sep=''):
@@ -39,11 +18,15 @@ def ghetto_yaml(o, _indent="", _sep=''):
         if _sep:
             print()
         for key, value in o.items():
-            print(_indent, key, ":", sep="", end="")
+            print(
+                _indent,
+                key if _isplainkey(key) else dumps_json(key, ensure_ascii=False),
+                ":",
+                sep="",
+                end="",
+            )
             ghetto_yaml(
-                value,
-                _indent if isinstance(value, list) else _indent + "  ",
-                _sep=" ",
+                value, _indent if isinstance(value, list) else _indent + "  ", _sep=" "
             )
     elif isinstance(o, list) and len(o):
         if _sep:
@@ -57,7 +40,7 @@ def ghetto_yaml(o, _indent="", _sep=''):
             print(_indent, line, sep="")
     else:
         print(_sep, end="")
-        dump_json(o, stdout)
+        dump_json(o, stdout, ensure_ascii=False)
         print()
 
 

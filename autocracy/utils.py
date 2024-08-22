@@ -1,5 +1,5 @@
 from asyncio import CancelledError, ensure_future, wait
-from collections.abc import KeysView, Mapping
+from collections.abc import KeysView
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from difflib import unified_diff
