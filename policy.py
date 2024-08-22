@@ -1,8 +1,8 @@
 from typing import Any
 
-from autocracy.edicts import File, Group, Packages, RecursiveFiles, Run
+from autocracy.decrees import File, Group, Packages, RecursiveFiles, Run
 
-facts: Any
+reports: Any
 
 foo = File(
     target='/tmp/foo',
@@ -15,9 +15,9 @@ bar = File(
     activate_if=lambda: foo.updated,
 )
 
-factsfile = File(
-    target='/tmp/facts',
-    contents=f"{facts.uname.version} {facts[4].foo.bar()=}\n",
+reportsfile = File(
+    target='/tmp/reports',
+    contents=f"{reports.uname.version} {reports[4].foo.bar()=}\n",
 )
 
 gitignore = File(

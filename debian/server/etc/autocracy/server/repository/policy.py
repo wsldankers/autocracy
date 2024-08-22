@@ -1,4 +1,4 @@
-# Add your edicts here. Example:
+# Add your decrees here. Example:
 #
 # include('standard') # includes standard.py, fails if included before
 # require('standard') # includes standard.py, does not fail if included before

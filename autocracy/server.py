@@ -25,7 +25,7 @@ import aiohttp.web
 
 from .aiohttp import TCPSite, UnixSite
 from .common import load_config, load_policy, load_tags
-from .edicts.base import BaseRepository
+from .decrees.base import BaseRepository
 from .rpc import RPC
 from .utils import *
 
@@ -116,11 +116,11 @@ class Admin(BaseClient):
             apply=self.apply,
             online=self.online,
             quit=self.quit,
-            facts=self.facts,
+            reports=self.reports,
         )
 
-    async def facts(self, name):
-        return (self.server.clients[name].facts,)
+    async def reports(self, name):
+        return (self.server.clients[name].reports,)
 
     async def online(self):
         return list(self.server.clients)
@@ -167,19 +167,19 @@ class Admin(BaseClient):
 
 
 class Client(BaseClient):
-    facts: Optional[dict] = None
+    reports: Optional[dict] = None
     name: str
 
     @weakproperty
     def rpc(self) -> RPC:
-        return RPC(self.ws, facts=self.accept_facts)
+        return RPC(self.ws, reports=self.accept_reports)
 
     @initializer
     def remotely_known_files(self) -> dict[str, stat_result]:
         return {}
 
-    async def accept_facts(self, facts) -> None:
-        self.facts = facts
+    async def accept_reports(self, reports) -> None:
+        self.reports = reports
         # await self.apply()
 
     async def apply(self) -> None:
@@ -188,9 +188,9 @@ class Client(BaseClient):
 
         repository = Repository(root=self.repository_root)
 
-        facts = Object(self.facts or {})
+        reports = Object(self.reports or {})
 
-        policy = load_policy(repository.get_file, name, facts=facts)
+        policy = load_policy(repository.get_file, name, reports=reports)
         policy._provision(repository)
 
         rpc = self.rpc

@@ -1,5 +1,6 @@
 from errno import ENOTEMPTY
 from grp import getgrgid, getgrnam
+from itertools import chain
 from os import (
     F_OK,
     access,
@@ -18,14 +19,14 @@ from pwd import getpwnam, getpwuid
 from shutil import rmtree
 from stat import S_IMODE, S_ISDIR, S_ISLNK
 from types import MappingProxyType
-from typing import MutableMapping, Optional, Union, cast
+from typing import Any, MutableMapping, Optional, Union, cast
 
 from ..utils import *
 from .base import BaseRepository, Decree
 
 
 class _FileHandlingAction:
-    __slots__ = ('target', 'create', 'chown', 'chmod', 'contents', 'report')
+    __slots__ = ('target', 'create', 'chown', 'chmod', 'contents', 'summary')
 
     target: Union[Path, str]
     # create is just informational but used to see if parent directories
@@ -35,7 +36,7 @@ class _FileHandlingAction:
     chmod: Optional[int]
     contents: Optional[bytes]
 
-    report: dict
+    summary: dict
 
     def __bool__(self):
         return (
@@ -127,7 +128,7 @@ class _FileHandlingMixin:
         mode = self._mode
         action = _FileHandlingAction()
         action.target = target
-        report = {}
+        summary = {}
         try:
             with open(target, 'rb') as fh:
                 st = stat(fh.fileno())
@@ -148,26 +149,26 @@ class _FileHandlingMixin:
 
         if needs_chown:
             if uid is not None:
-                owner_report = {'new': getpwuid(uid).pw_name}
+                owner_summary = {'new': getpwuid(uid).pw_name}
                 if not action.create:
-                    owner_report['old'] = getpwuid(st.st_uid).pw_name
-                report['owner'] = owner_report
+                    owner_summary['old'] = getpwuid(st.st_uid).pw_name
+                summary['owner'] = owner_summary
 
             if gid is not None:
-                group_report = {'new': getgrgid(gid).gr_name}
+                group_summary = {'new': getgrgid(gid).gr_name}
                 if not action.create:
-                    group_report['old'] = getgrgid(st.st_gid).gr_name
-                report['group'] = group_report
+                    group_summary['old'] = getgrgid(st.st_gid).gr_name
+                summary['group'] = group_summary
 
             action.chown = (-1 if uid is None else uid, -1 if gid is None else gid)
         else:
             action.chown = None
 
         if needs_chmod:
-            mode_report = {'new': mode}
+            mode_summary = {'new': mode}
             if not action.create:
-                mode_report['old'] = S_IMODE(st.st_mode)
-            report['mode'] = mode_report
+                mode_summary['old'] = S_IMODE(st.st_mode)
+            summary['mode'] = mode_summary
 
             action.chmod = mode
         else:
@@ -197,11 +198,11 @@ class _FileHandlingMixin:
                         )
                         or "empty file"
                     )
-            report['contents'] = diff
+            summary['contents'] = diff
         else:
             action.contents = None
 
-        action.report = report
+        action.summary = summary
 
         return action
 
@@ -260,11 +261,20 @@ class File(Initializer, _FileHandlingMixin, Decree):
         return str(contents).encode('UTF-8')
 
     @initializer
+    def _action(self):
+        return self._check_file(self.target, self._computed_contents)
+
+    @property
     def _update_needed(self):
-        target = self.target
-        action = self._check_file(self.target, self._computed_contents)
-        self._action = action
-        return action.report
+        return bool(self._action)
+
+    @property
+    def _summary(self):
+        summary = super()._summary
+        update_summary = self._action.summary
+        if update_summary:
+            summary['updated'] = update_summary
+        return summary
 
     def _update(self):
         print(f"{self.name}: running")
@@ -300,41 +310,49 @@ class RecursiveFiles(Initializer, _FileHandlingMixin, Decree):
         self.__dict__['source'] = str(value)
 
     @initializer
-    def _actions(self) -> list[_FileHandlingAction]:
-        return []
+    def _existing_parents(self) -> set[Path]:
+        return {
+            Path(self.target).parent,
+            *chain.from_iterable(
+                action.target.parents for action in self._actions if not action.create
+            ),
+        }
 
     @initializer
-    def _existing_parents(self) -> set[Path]:
-        return {Path(self.target).parent}
-
-    @property
-    def _update_needed(self) -> bool:
+    def _actions(self) -> list[_FileHandlingAction]:
         source_str = self.source
         if source_str is None:
-            return False
+            return []
         source = Path(source_str)
         target = Path(self.target)
-        files = self._files
-        actions = self._actions
-        existing_parents = self._existing_parents
-        for filename, contents in list(files.items()):
-            full_path = target / Path(filename).relative_to(source)
-            action = self._check_file(full_path, contents)
-            if action:
-                print(action)
-                actions.append(action)
-            if not action.create:
-                self._existing_parents.update(full_path.parents)
+        check_file = self._check_file
+        return list(
+            filter(
+                None,
+                (
+                    check_file(target / Path(filename).relative_to(source), contents)
+                    for filename, contents in self._files.items()
+                ),
+            )
+        )
 
-        return bool(actions)
+    @property
+    def _update_needed(self):
+        return bool(self._actions)
+
+    @property
+    def _summary(self) -> dict[str, Any]:
+        summary = super()._summary
+        summary['updated'] = {actions.target: action.summary for action in self._actions}
+        return summary
 
     def _update(self) -> None:
-        print(f"{self.name}: running")
+        # print(f"{self.name}: running")
 
         existing_parents = self._existing_parents
 
         for action in self._actions:
-            print(f"updating {action.target}")
+            # print(f"updating {action.target}")
             try:
                 action()
             except FileNotFoundError:

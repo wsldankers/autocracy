@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from inspect import currentframe
 from pathlib import Path
 from subprocess import run
-from typing import TYPE_CHECKING, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Iterable, Optional, Sequence, Union
 
 from ..utils import *
 
@@ -72,6 +72,15 @@ class Decree:
         raise RuntimeError(f"{self}: not applied yet (did you forget a lambda?)")
 
     @property
+    def _summary(self):
+        summary = {}
+        if self.updated:
+            summary['updated'] = True
+        if self.activated:
+            summary['activated'] = True
+        return summary
+
+    @property
     def _should_activate(self):
         return call_if_callable(self.activate_if)
 
@@ -91,6 +100,8 @@ class Decree:
             )
         finally:
             self.applied = True
+
+        return self._summary
 
     def __str__(self):
         name = self.name
@@ -114,40 +125,40 @@ class Group(Initializer, Decree):
     def _decrees(self) -> Sequence[Decree]:
         raise RuntimeError(f"{self}: not initialized yet (did you forget a lambda?)")
 
-    def _prepare(self, name=None):
+    def _prepare(self, name: Optional[str] = None):
         super()._prepare(name)
         decrees = extract_decrees(vars(self))
         for subname, decree in decrees.items():
             decree._prepare(subname)
         self._decrees = decrees.values()
 
-    def _provision(self, repository: BaseRepository):
+    def _provision(self, repository: BaseRepository) -> None:
         for decree in self._decrees:
             decree._provision(repository)
 
     @initializer
-    def updated(self):
-        # warn(f"{self}:")
-        # for decree in self._decrees:
-        #     warn(f"\t{decree}: {decree.updated!r} {decree.activated!r}")
-
+    def updated(self) -> bool:
         return any(decree.updated for decree in self._decrees)
 
     @initializer
-    def activated(self):
+    def activated(self) -> bool:
         return any(decree.activated for decree in self._decrees)
 
     @initializer
-    def _update_needed(self):
+    def _update_needed(self) -> bool:
+        return any(decree._update_needed for decree in self._decrees)
+
+    @property
+    def _summary(self) -> dict[str, Any]:
         return {
-            name: update
-            for name, update in (
-                (decree.name, decree._update_needed) for decree in self._decrees
+            name: summary
+            for name, summary in (
+                (decree.name, decree._summary) for decree in self._decrees
             )
-            if update
+            if summary
         }
 
-    def _apply(self, *args, **kwargs):
+    def _apply(self, *args, **kwargs) -> dict[str, Any]:
         if self.applied:
             raise RuntimeError(f"{self}: refused attempt to run twice")
         try:
@@ -156,19 +167,19 @@ class Group(Initializer, Decree):
         finally:
             self.applied = True
 
-    # To appease mypy:
-    def __getattr__(self, name: str) -> Decree:
-        return getattr(super(), name)
+        return self._summary
 
-    def __setattr__(self, name: str, value: Decree):
-        setattr(super(), name, value)
+    if TYPE_CHECKING:
+        # To appease mypy
 
-    def __delattr__(self, name: str):
-        delattr(super(), name)
+        def __getattr__(self, name: str) -> Decree:
+            return getattr(super(), name)
 
-    del __getattr__
-    del __setattr__
-    del __delattr__
+        def __setattr__(self, name: str, value: Decree):
+            setattr(super(), name, value)
+
+        def __delattr__(self, name: str):
+            delattr(super(), name)
 
 
 class Policy(Group):
@@ -177,7 +188,7 @@ class Policy(Group):
 
 class Run(Initializer, Decree):
     @fallback
-    def command(self):
+    def command(self) -> Union[str, bytes, Iterable]:
         raise RuntimeError(f"{self.name}: no command configured")
 
     def _activate(self):
@@ -191,8 +202,8 @@ class Run(Initializer, Decree):
             )
         except TypeError:
             command = tuple(map(ensure_bytes, command))
-        completed = run(command)
-        completed.check_returncode()
+        # FIXME: capture stdout/stderr
+        run(command, check=True, stdin=DEVNULL)
 
 
 __all__ = ('Group', 'Run')

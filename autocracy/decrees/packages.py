@@ -15,11 +15,19 @@ class Packages(Initializer, Decree):
     clean = False
     # quick = False
     gentle = False
-    _install: Set[str]
-    _remove: Set[str]
 
     @property
-    def _update_needed(self) -> bool:
+    def _install(self) -> Set[str]:
+        install, _ = self._install_remove
+        return install
+
+    @property
+    def _remove(self) -> Set[str]:
+        _, remove = self._install_remove
+        return remove
+
+    @initializer
+    def _install_remove(self):
         result = run(
             ['dpkg', '--print-architecture'],
             capture_output=True,
@@ -71,20 +79,28 @@ class Packages(Initializer, Decree):
                 if package in installed:
                     remove.add(package)
 
-        self._install = install
-        self._remove = remove
+        return (install, remove)
 
-        report = {}
+    @property
+    def _update_needed(self) -> bool:
+        install, remove = self._install_remove
+        return bool(install or remove)
+
+    @property
+    def _summary(self):
+        summary = super()._summary
+        update_summary = {}
+        install, remove = self._install_remove
         if install:
-            report['install'] = sorted(install)
+            update_summary['install'] = sorted(install)
         if remove:
-            report['remove'] = sorted(remove)
-
-        return report
+            update_summary['remove'] = sorted(remove)
+        if update_summary:
+            summary['updated'] = update_summary
+        return summary
 
     def _update(self) -> None:
-        install = self._install
-        remove = self._remove
+        install, remove = self._install_remove
 
         if self.clean:
             run(

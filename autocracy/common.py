@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional, Union
 from weakref import ref as weakref
 
-from .edicts.base import Decree, Policy, extract_decrees, loadfilename
+from .decrees.base import Decree, Policy, extract_decrees, loadfilename
 from .utils import *
 
 _builtins = vars(builtins_module)

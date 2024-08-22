@@ -10,8 +10,8 @@ from typing import Any, Optional, Union
 import aiohttp.web
 
 from .common import load_config, load_policy
-from .edicts.base import BaseRepository
-from .facts import get_facts
+from .decrees.base import BaseRepository
+from .reports import get_reports
 from .rpc import RPC, immediate
 from .utils import *
 
@@ -35,7 +35,7 @@ class Repository(BaseRepository):
 
 class Client(Initializer):
     ws: web.WebSocketResponse
-    facts: Optional[dict] = None
+    reports: Optional[dict] = None
     config: dict[str, Any]
 
     @weakproperty
@@ -56,8 +56,8 @@ class Client(Initializer):
         return deque()
 
     @initializer
-    def max_facts_interval(self) -> int:
-        return self.config.get('max_facts_interval', 60)
+    def max_reports_interval(self) -> int:
+        return self.config.get('max_reports_interval', 60)
 
     @initializer
     def dry_run(self) -> bool:
@@ -66,12 +66,13 @@ class Client(Initializer):
     async def apply(self, name, dry_run=False) -> None:
         repository = Repository(files=self.files)
 
-        facts = Object(self.facts or {})
-        policy = load_policy(repository.get_file, name, facts=facts)
+        reports = Object(self.reports or {})
+        policy = load_policy(repository.get_file, name, reports=reports)
         policy._provision(repository)
         try:
-            await asyncio.to_thread(policy._apply, dry_run=dry_run or self.dry_run)
-            return [policy._update_needed]
+            return [
+                await asyncio.to_thread(policy._apply, dry_run=dry_run or self.dry_run)
+            ]
         except Exception:
             return [{'error': format_exc()}]
 
@@ -83,32 +84,32 @@ class Client(Initializer):
         for filename in filenames:
             del files[filename]
 
-    async def fact_collector(self) -> None:
-        previous_facts = object()
-        facts_sleep = 0
-        max_facts_interval = self.max_facts_interval
-        facts: Optional[dict[str, Any]]
+    async def report_collector(self) -> None:
+        previous_reports = object()
+        reports_sleep = 0
+        max_reports_interval = self.max_reports_interval
+        reports: Optional[dict[str, Any]]
         while True:
-            # warn("getting facts")
+            # warn("getting reports")
             try:
-                facts = await asyncio.to_thread(get_facts)
+                reports = await asyncio.to_thread(get_reports)
             except Exception as e:
                 # print_exc()
                 warn(str(e))
-                facts_sleep = max_facts_interval
+                reports_sleep = max_reports_interval
             else:
-                if facts != previous_facts:
-                    self.facts = previous_facts = facts
-                    facts_sleep = 0
-                    # warn("sending facts")
-                    await self.rpc.remote_command('facts', facts, rsvp=False)
-            facts = None
-            facts_sleep = min(facts_sleep + 1, max_facts_interval)
-            await asyncio.sleep(facts_sleep)
+                if reports != previous_reports:
+                    self.reports = previous_reports = reports
+                    reports_sleep = 0
+                    # warn("sending reports")
+                    await self.rpc.remote_command('reports', reports, rsvp=False)
+            reports = None
+            reports_sleep = min(reports_sleep + 1, max_reports_interval)
+            await asyncio.sleep(reports_sleep)
 
     async def __call__(self) -> None:
         files = self.files
-        fact_collector_task = asyncio.create_task(self.fact_collector())
+        report_collector_task = asyncio.create_task(self.report_collector())
         pending_files = self.pending_files
         try:
             async for blob in self.rpc:
@@ -116,9 +117,9 @@ class Client(Initializer):
                 files[Path(filename)] = blob
                 # warn(f"client got data for file {filename!r}")
         finally:
-            fact_collector_task.cancel()
+            report_collector_task.cancel()
             try:
-                await fact_collector_task
+                await report_collector_task
             except asyncio.CancelledError:
                 pass
 

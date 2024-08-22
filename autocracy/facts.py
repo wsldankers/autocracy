@@ -11,7 +11,7 @@ from psutil import cpu_count, cpu_freq, net_if_addrs, swap_memory, virtual_memor
 from .utils import get_file
 
 
-def get_interfaces(facts) -> None:
+def get_interfaces(reports) -> None:
     interfaces = {}
 
     for name, addrs in net_if_addrs().items():
@@ -35,7 +35,7 @@ def get_interfaces(facts) -> None:
                 interface['mac'] = addr.address
         interfaces[name] = interface
 
-    facts['interfaces'] = {
+    reports['interfaces'] = {
         name: {
             family: (
                 [
@@ -55,17 +55,17 @@ def get_interfaces(facts) -> None:
     }
 
 
-def get_hostname(facts) -> None:
-    facts['hostname'] = gethostname()
+def get_hostname(reports) -> None:
+    reports['hostname'] = gethostname()
 
 
-def get_fqdn(facts) -> None:
-    addrinfo = getaddrinfo(facts['hostname'], 0, flags=AI_CANONNAME)
+def get_fqdn(reports) -> None:
+    addrinfo = getaddrinfo(reports['hostname'], 0, flags=AI_CANONNAME)
     primary_address = defaultdict(set)
     for addr in addrinfo:
         af, _, _, name, sockaddr = addr
         if name:
-            facts['fqdn'] = name
+            reports['fqdn'] = name
         address = ip_address(sockaddr[0])
         if af == AF_INET:
             primary_address['ipv4'].add(address)
@@ -73,24 +73,24 @@ def get_fqdn(facts) -> None:
             primary_address['ipv6'].add(address)
 
     if primary_address:
-        facts['primary_address'] = {
+        reports['primary_address'] = {
             family: [str(address) for address in sorted(values)]
             for family, values in primary_address.items()
         }
 
 
-def get_platform(facts) -> None:
-    facts['platform'] = platform
+def get_platform(reports) -> None:
+    reports['platform'] = platform
 
 
 _uname_fields = ('sysname', 'nodename', 'release', 'version', 'machine')
 
 
-def get_uname(facts) -> None:
-    facts['uname'] = dict(zip(_uname_fields, uname()))
+def get_uname(reports) -> None:
+    reports['uname'] = dict(zip(_uname_fields, uname()))
 
 
-def get_cpu(facts) -> None:
+def get_cpu(reports) -> None:
     cpu = {
         'cores': cpu_count(logical=False),
         'threads': cpu_count(logical=True),
@@ -99,26 +99,26 @@ def get_cpu(facts) -> None:
         cpu['frequency'] = int((Decimal(cpu_freq().max) * 1000000).to_integral_value())
     except NotImplementedError:
         pass
-    facts['cpu'] = cpu
+    reports['cpu'] = cpu
 
 
-def get_memory(facts) -> None:
-    facts['memory'] = {
+def get_memory(reports) -> None:
+    reports['memory'] = {
         'ram': virtual_memory().total,
         'swap': swap_memory().total,
     }
 
 
-def get_qemu(facts) -> None:
+def get_qemu(reports) -> None:
     try:
         if get_file('/sys/class/dmi/id/sys_vendor').strip() == 'QEMU':
-            facts['qemu'] = True
+            reports['qemu'] = True
     except FileNotFoundError:
         pass
 
 
-def get_facts() -> dict[str, Any]:
-    facts: dict[str, Any] = {}
+def get_reports() -> dict[str, Any]:
+    reports: dict[str, Any] = {}
     for f in (
         get_interfaces,
         get_hostname,
@@ -129,14 +129,14 @@ def get_facts() -> dict[str, Any]:
         get_memory,
         get_qemu,
     ):
-        f(facts)
+        f(reports)
 
         # try:
-        #     f(facts)
+        #     f(reports)
         # except Exception as e:
         #     print(str(e), file=stderr, flush=True)
 
-    return facts
+    return reports
 
 
-__all__ = ('get_facts',)
+__all__ = ('get_reports',)

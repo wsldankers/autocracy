@@ -1,5 +1,5 @@
 from subprocess import DEVNULL, run
-from typing import Optional
+from typing import Any, Optional
 
 from ..utils import *
 from .base import Decree
@@ -19,7 +19,7 @@ class Service(Initializer, Decree):
     _was_active = False
 
     def _prepare(self, name: Optional[str] = None) -> None:
-        super()._prepare()
+        super()._prepare(name)
 
         if is_true(self.mask) and (is_true(self.enable) or is_true(self.active)):
             raise RuntimeError(
@@ -88,16 +88,19 @@ class Service(Initializer, Decree):
                 if active:
                     self._change_active = True
 
-        report = {}
-
+    @property
+    def _summary(self) -> dict[str, Any]:
+        summary = super()._summary
+        update_summary = {}
         if self._change_enable:
-            report['enable'] = bool(enable)
+            update_summary['enable'] = bool(enable)
         if self._change_active:
-            report['active'] = bool(active)
+            update_summary['active'] = bool(active)
         if self._change_mask:
-            report['mask'] = bool(mask)
-
-        return report
+            update_summary['mask'] = bool(mask)
+        if update_summary:
+            summary['updated'] = update_summary
+        return summary
 
     def _update(self) -> None:
         unit = self.unit
@@ -143,27 +146,28 @@ class Service(Initializer, Decree):
                     command.append('stop')
 
             command.append(unit)
-            run(command, text=True, check=True, stdin=DEVNULL)
+            run(command, check=True, stdin=DEVNULL)
 
-    def _activate(self) -> None:
-        reload = self.reload
-        restart = self.restart
-
-        if not reload and not restart:
-            return
+    @property
+    def _should_activate(self) -> bool:
+        if not self.reload and not self.restart:
+            return False
 
         if self._change_active is not None:
             # We just started or stopped it, no use reloading/restarting it again
-            return
+            return False
 
         if not self._was_active:
             # It wasn't active and we didn't start it. Nothing to do, then.
-            return
+            return False
 
+        return super()._should_activate
+
+    def _activate(self) -> None:
         command = ['systemctl']
 
-        if reload:
-            if restart:
+        if self.reload:
+            if self.restart:
                 command.append('try-reload-or-restart')
             else:
                 command.append('reload')
@@ -171,7 +175,7 @@ class Service(Initializer, Decree):
             command.append('try-restart')
 
         command.append(self.unit)
-        run(command, text=True, check=True, stdin=DEVNULL)
+        run(command, check=True, stdin=DEVNULL)
 
 
 __all__ = ('Service',)

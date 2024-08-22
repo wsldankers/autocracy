@@ -65,7 +65,7 @@ class KeyValue(dict):
         if not isinstance(values, Reversible):
             # If it's not reversible it probably doesn't have a defined order.
             # We need the process to be deterministic though, to prevent
-            # edict.updated from becoming true spuriously.
+            # decree.updated from becoming true spuriously.
             values = sorted(values)
         value_separator = self.value_separator
         if value_separator is None:
