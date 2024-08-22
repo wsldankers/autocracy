@@ -11,7 +11,7 @@ import aiohttp.web
 
 from .common import load_config, load_policy
 from .decrees.base import BaseRepository
-from .report import get_report
+from .feints import get_feints
 from .rpc import RPC, immediate
 from .utils import *
 
@@ -35,7 +35,7 @@ class Repository(BaseRepository):
 
 class Client(Initializer):
     ws: web.WebSocketResponse
-    report: Optional[dict] = None
+    feints: Optional[dict] = None
     config: dict[str, Any]
 
     @weakproperty
@@ -56,8 +56,8 @@ class Client(Initializer):
         return deque()
 
     @initializer
-    def max_report_interval(self) -> int:
-        return self.config.get('max_report_interval', 60)
+    def max_feints_interval(self) -> int:
+        return self.config.get('max_feints_interval', 60)
 
     @initializer
     def dry_run(self) -> bool:
@@ -66,8 +66,8 @@ class Client(Initializer):
     async def apply(self, name, dry_run=False) -> None:
         repository = Repository(files=self.files)
 
-        report = Object(self.report or {})
-        policy = load_policy(repository.get_file, name, report=report)
+        feints = Object(self.feints or {})
+        policy = load_policy(repository.get_file, name, feints=feints)
         policy._provision(repository)
         try:
             return [
@@ -84,32 +84,32 @@ class Client(Initializer):
         for filename in filenames:
             del files[filename]
 
-    async def report_collector(self) -> None:
-        previous_report = object()
-        report_sleep = 0
-        max_report_interval = self.max_report_interval
-        report: Optional[dict[str, Any]]
+    async def feints_collector(self) -> None:
+        previous_feints = object()
+        feints_sleep = 0
+        max_feints_interval = self.max_feints_interval
+        feints: Optional[dict[str, Any]]
         while True:
-            # warn("getting report")
+            # warn("getting feints")
             try:
-                report = await asyncio.to_thread(get_report)
+                feints = await asyncio.to_thread(get_feints)
             except Exception as e:
                 # print_exc()
                 warn(str(e))
-                report_sleep = max_report_interval
+                feints_sleep = max_feints_interval
             else:
-                if report != previous_report:
-                    self.report = previous_report = report
-                    report_sleep = 0
-                    # warn("sending report")
-                    await self.rpc.remote_command('report', report, rsvp=False)
-            report = None
-            report_sleep = min(report_sleep + 1, max_report_interval)
-            await asyncio.sleep(report_sleep)
+                if feints != previous_feints:
+                    self.feints = previous_feints = feints
+                    feints_sleep = 0
+                    # warn("sending feints")
+                    await self.rpc.remote_command('feints', feints, rsvp=False)
+            feints = None
+            feints_sleep = min(feints_sleep + 1, max_feints_interval)
+            await asyncio.sleep(feints_sleep)
 
     async def __call__(self) -> None:
         files = self.files
-        report_collector_task = asyncio.create_task(self.report_collector())
+        feints_collector_task = asyncio.create_task(self.feints_collector())
         pending_files = self.pending_files
         try:
             async for blob in self.rpc:
@@ -117,9 +117,9 @@ class Client(Initializer):
                 files[Path(filename)] = blob
                 # warn(f"client got data for file {filename!r}")
         finally:
-            report_collector_task.cancel()
+            feints_collector_task.cancel()
             try:
-                await report_collector_task
+                await feints_collector_task
             except asyncio.CancelledError:
                 pass
 
