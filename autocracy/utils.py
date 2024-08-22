@@ -196,12 +196,6 @@ is_true = bool
 
 
 def frozendict(*args, **kwargs) -> MappingProxyType:
-    if len(args) == 1 and not kwargs:
-        (arg,) = args
-        if isinstance(arg, MappingProxyType):
-            return arg
-        if isinstance(arg, Mapping):
-            return MappingProxyType(arg)
     return MappingProxyType(dict(*args, **kwargs))
 
 
