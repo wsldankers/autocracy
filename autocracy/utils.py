@@ -17,6 +17,7 @@ from typing import (
     Iterable,
     Iterator,
     Optional,
+    Sequence,
     TypeVar,
     Union,
     cast,
@@ -211,16 +212,16 @@ async def _result_or_exception(awaitable: Awaitable):
         return e
 
 
-async def parallel(awaitables: Iterable[Awaitable]) -> list:
-    as_list = [ensure_future(awaitable) for awaitable in awaitables]
-    if not as_list:
-        return []
-    await wait(as_list)
-    return [await _result_or_exception(awaitable) for awaitable in as_list]
+async def parallel(awaitables: Iterable[Awaitable]) -> Sequence:
+    tasks = tuple(ensure_future(awaitable) for awaitable in awaitables)
+    if not tasks:
+        return ()
+    await wait(tasks)
+    return tuple(await _result_or_exception(awaitable) for awaitable in tasks)
 
 
 @asynccontextmanager
-async def helper_task(awaitable):
+async def helper_task(awaitable: Awaitable):
     task = ensure_future(awaitable)
     yield task
     task.cancel()
@@ -228,6 +229,21 @@ async def helper_task(awaitable):
         await task
     except CancelledError:
         pass
+
+
+@asynccontextmanager
+async def helper_tasks(*awaitables):
+    if len(awaitables) == 1:
+        (awaitables,) = awaitables
+    tasks = tuple(ensure_future(awaitable) for awaitable in awaitables)
+    yield tasks
+    for task in tasks:
+        task.cancel()
+    for task in tasks:
+        try:
+            await task
+        except CancelledError:
+            pass
 
 
 def _isoformat(timestamp: int) -> str:
@@ -336,7 +352,7 @@ def clean_whitespace(text: str, max_empty_lines: Optional[int] = 1) -> str:
 
     prefix = commonprefix(list(filter(None, lines)))
     prefix_len = len(prefix) - len(prefix.lstrip())
-    lines.append("") # for the final newline
+    lines.append("")  # for the final newline
     return "\n".join(line[prefix_len:] for line in lines)
 
 
@@ -773,6 +789,7 @@ __all__ = (
     'get_file',
     'ghost',
     'helper_task',
+    'helper_tasks',
     'initializer',
     'is_byteslike',
     'is_false',
