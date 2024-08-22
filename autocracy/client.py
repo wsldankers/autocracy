@@ -109,19 +109,12 @@ class Client(Initializer):
 
     async def __call__(self) -> None:
         files = self.files
-        feints_collector_task = asyncio.create_task(self.feints_collector())
         pending_files = self.pending_files
-        try:
+        async with helper_task(self.feints_collector()):
             async for blob in self.rpc:
                 filename = pending_files.popleft()
                 files[Path(filename)] = blob
                 # warn(f"client got data for file {filename!r}")
-        finally:
-            feints_collector_task.cancel()
-            try:
-                await feints_collector_task
-            except asyncio.CancelledError:
-                pass
 
 
 async def main(procname, config_file, *args, **env):

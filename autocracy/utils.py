@@ -1,6 +1,6 @@
-from asyncio import get_running_loop, wait
-from asyncio.coroutines import iscoroutine
+from asyncio import CancelledError, ensure_future, wait
 from collections.abc import KeysView, Mapping
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from difflib import unified_diff
 from functools import update_wrapper, wraps
@@ -212,15 +212,22 @@ async def _result_or_exception(awaitable: Awaitable):
 
 
 async def parallel(awaitables: Iterable[Awaitable]) -> list:
-    create_task = get_running_loop().create_task
-    as_list = [
-        create_task(awaitable) if iscoroutine(awaitable) else awaitable
-        for awaitable in awaitables
-    ]
+    as_list = [ensure_future(awaitable) for awaitable in awaitables]
     if not as_list:
         return []
     await wait(as_list)
     return [await _result_or_exception(awaitable) for awaitable in as_list]
+
+
+@asynccontextmanager
+async def helper_task(awaitable):
+    task = ensure_future(awaitable)
+    yield task
+    task.cancel()
+    try:
+        await task
+    except CancelledError:
+        pass
 
 
 def _isoformat(timestamp: int) -> str:
@@ -324,9 +331,13 @@ def clean_whitespace(text: str, max_empty_lines: Optional[int] = 1) -> str:
             if max_empty_lines is not None and empty_lines > max_empty_lines:
                 empty_lines = max_empty_lines
 
+    if not lines:
+        return ""
+
     prefix = commonprefix(list(filter(None, lines)))
     prefix_len = len(prefix) - len(prefix.lstrip())
-    return ''.join(line[prefix_len:] + "\n" for line in lines)
+    lines.append("") # for the final newline
+    return "\n".join(line[prefix_len:] for line in lines)
 
 
 def call_if_callable(v, *args, **kwargs):
@@ -758,8 +769,10 @@ __all__ = (
     'ensure_bytes',
     'exports',
     'fallback',
+    'frozendict',
     'get_file',
     'ghost',
+    'helper_task',
     'initializer',
     'is_byteslike',
     'is_false',
@@ -769,8 +782,8 @@ __all__ = (
     'split_on_newlines',
     'diff_fix_newlines',
     'string_diff',
-    'frozendict',
     'normalize_path',
+    'parallel',
     'put_file',
     'subdict',
     'warn',
