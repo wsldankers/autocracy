@@ -11,7 +11,7 @@ import aiohttp.web
 
 from .common import load_config, load_policy
 from .decrees.base import BaseRepository
-from .reports import get_reports
+from .report import get_report
 from .rpc import RPC, immediate
 from .utils import *
 
@@ -35,7 +35,7 @@ class Repository(BaseRepository):
 
 class Client(Initializer):
     ws: web.WebSocketResponse
-    reports: Optional[dict] = None
+    report: Optional[dict] = None
     config: dict[str, Any]
 
     @weakproperty
@@ -56,8 +56,8 @@ class Client(Initializer):
         return deque()
 
     @initializer
-    def max_reports_interval(self) -> int:
-        return self.config.get('max_reports_interval', 60)
+    def max_report_interval(self) -> int:
+        return self.config.get('max_report_interval', 60)
 
     @initializer
     def dry_run(self) -> bool:
@@ -66,8 +66,8 @@ class Client(Initializer):
     async def apply(self, name, dry_run=False) -> None:
         repository = Repository(files=self.files)
 
-        reports = Object(self.reports or {})
-        policy = load_policy(repository.get_file, name, reports=reports)
+        report = Object(self.report or {})
+        policy = load_policy(repository.get_file, name, report=report)
         policy._provision(repository)
         try:
             return [
@@ -85,27 +85,27 @@ class Client(Initializer):
             del files[filename]
 
     async def report_collector(self) -> None:
-        previous_reports = object()
-        reports_sleep = 0
-        max_reports_interval = self.max_reports_interval
-        reports: Optional[dict[str, Any]]
+        previous_report = object()
+        report_sleep = 0
+        max_report_interval = self.max_report_interval
+        report: Optional[dict[str, Any]]
         while True:
-            # warn("getting reports")
+            # warn("getting report")
             try:
-                reports = await asyncio.to_thread(get_reports)
+                report = await asyncio.to_thread(get_report)
             except Exception as e:
                 # print_exc()
                 warn(str(e))
-                reports_sleep = max_reports_interval
+                report_sleep = max_report_interval
             else:
-                if reports != previous_reports:
-                    self.reports = previous_reports = reports
-                    reports_sleep = 0
-                    # warn("sending reports")
-                    await self.rpc.remote_command('reports', reports, rsvp=False)
-            reports = None
-            reports_sleep = min(reports_sleep + 1, max_reports_interval)
-            await asyncio.sleep(reports_sleep)
+                if report != previous_report:
+                    self.report = previous_report = report
+                    report_sleep = 0
+                    # warn("sending report")
+                    await self.rpc.remote_command('report', report, rsvp=False)
+            report = None
+            report_sleep = min(report_sleep + 1, max_report_interval)
+            await asyncio.sleep(report_sleep)
 
     async def __call__(self) -> None:
         files = self.files

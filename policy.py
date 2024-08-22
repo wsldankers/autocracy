@@ -2,7 +2,7 @@ from typing import Any
 
 from autocracy.decrees import File, Group, Packages, RecursiveFiles, Run
 
-reports: Any
+report: Any
 
 foo = File(
     target='/tmp/foo',
@@ -15,9 +15,9 @@ bar = File(
     activate_if=lambda: foo.updated,
 )
 
-reportsfile = File(
-    target='/tmp/reports',
-    contents=f"{reports.uname.version} {reports[4].foo.bar()=}\n",
+reportfile = File(
+    target='/tmp/report',
+    contents=f"{report.uname.version} {report[4].foo.bar()=}\n",
 )
 
 gitignore = File(
