@@ -1,8 +1,8 @@
-fruitbak
---------
+autocracy
+---------
 
-Efficient disk-based backups with deduplication and compression.
+Systems administration for Pythonistas
 
-The debian packaging is maintained in git at https://git.fruit.je/fruitbak
+The debian packaging is maintained in git at https://git.fruit.je/autocracy
 
- -- Wessel Dankers <wsl@fruit.je>  Mon, 14 Sep 2009 19:41:22 +0200
+ -- Wessel Dankers <wsl@fruit.je>  Sat, 17 Feb 2024 23:46:43 +0100

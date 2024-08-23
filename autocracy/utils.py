@@ -207,11 +207,11 @@ async def _result_or_exception(awaitable: Awaitable):
 
 
 async def parallel(awaitables: Iterable[Awaitable]) -> Sequence:
-    tasks = tuple(ensure_future(awaitable) for awaitable in awaitables)
+    tasks = tuple(map(ensure_future, awaitables))
     if not tasks:
         return ()
     await wait(tasks)
-    return tuple(await _result_or_exception(awaitable) for awaitable in tasks)
+    return tuple(await _result_or_exception(task) for task in tasks)
 
 
 @asynccontextmanager
@@ -229,7 +229,7 @@ async def helper_task(awaitable: Awaitable):
 async def helper_tasks(*awaitables):
     if len(awaitables) == 1:
         (awaitables,) = awaitables
-    tasks = tuple(ensure_future(awaitable) for awaitable in awaitables)
+    tasks = tuple(map(ensure_future, awaitables))
     yield tasks
     for task in tasks:
         task.cancel()
