@@ -1,5 +1,4 @@
 import builtins as builtins_module
-from errno import ENOTEMPTY
 from pathlib import Path
 from typing import Any, Callable, Optional, Union
 from weakref import ref as weakref

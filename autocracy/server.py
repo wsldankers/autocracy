@@ -21,7 +21,7 @@ from sys import setswitchinterval
 from typing import Iterable, Optional, Union
 from weakref import ref as weakref
 
-import aiohttp.web
+import aiohttp.web as web
 
 from .aiohttp import TCPSite, UnixSite
 from .common import load_config, load_policy, load_tags
@@ -29,7 +29,6 @@ from .decrees.base import BaseRepository
 from .rpc import RPC
 from .utils import *
 
-web = aiohttp.web
 
 peercred_struct = Struct('3i')
 

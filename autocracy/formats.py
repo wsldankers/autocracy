@@ -5,7 +5,7 @@ from json import dumps
 from os import linesep
 from re import compile as regcomp
 from shlex import quote as quote_shell
-from typing import Callable, Optional
+from typing import Callable, Optional, Iterable
 
 from lxml.etree import Element, ElementTree, _Element
 
@@ -51,7 +51,7 @@ class KeyValue(dict):
         self.print(key, next(iterator), sep=self.key_separator, end=newline, file=fh)
         continuation_indent = self.continuation_indent
         for line in iterator:
-            print(continuation_indent, line, sep='', end=newline, file=fh)
+            self.print(continuation_indent, line, sep='', end=newline, file=fh)
 
     def print_value(self, fh, key, value) -> None:
         if value is None:
@@ -77,8 +77,8 @@ class KeyValue(dict):
     def print_start_section(self, fh, name) -> None:
         newline = self.newline
         if fh.tell():
-            print(end=newline, file=fh)
-        print(f"[{name}]", end=newline, file=fh)
+            self.print(end=newline, file=fh)
+        self.print(f"[{name}]", end=newline, file=fh)
 
     def print_end_section(self, fh, name) -> None:
         pass
@@ -114,6 +114,16 @@ class ResolvConf(KeyValue):
     value_separator = None
 
 
+class MailAliases(KeyValue):
+    key_separator = ': '
+    value_separator = ', '
+
+
+class PostfixMap(KeyValue):
+    key_separator = ' '
+    value_separator = ', '
+
+
 class ShellEnv(KeyValue):
     key_separator = '='
     continuation_indent = ''
@@ -137,6 +147,59 @@ class SshdConfig(SshConfig):
     pass
 
 
+def _xml(iterable: Iterable) -> Element:
+    """
+    Create an Element according to specifications.
+
+    ['foo', {'x': 'y'}, 'bar'] => <foo x="y">bar</foo>
+    ['foo', ['bar', 'baz']] => <foo><bar>baz</bar></foo>
+    """
+
+    iterator = iter(iterable)
+    name = next(iterator)
+    assert isinstance(name, str)
+
+    children = []
+    attrib = {}
+    text = []
+    tail = []
+
+    def flush_tail() -> None:
+        if tail:
+            children[-1].tail = ''.join(tail)
+            tail.clear()
+
+    def append(child: _Element) -> None:
+        flush_tail()
+        children.append(child)
+
+    for child in iterator:
+        if isinstance(child, (list, tuple)):
+            append(_xml(child))
+        elif isinstance(child, _Element):
+            append(child)
+        elif isinstance(child, Mapping):
+            for key, value in child.items():
+                if value is None:
+                    attrib.pop(key, None)
+                else:
+                    attrib[key] = value
+        else:
+            child = str(child)
+            if child:
+                (tail if children else text).append(child)
+
+        flush_tail()
+
+        node = Element(name, attrib=attrib)
+        if text:
+            node.text = ''.join(text)
+        for child in children:
+            node.append(child)
+
+    return node
+
+
 class XML(list):
     def __init__(self, *args, **kwargs):
         super().__init__(args)
@@ -145,51 +208,10 @@ class XML(list):
         self.options = kwargs
 
     def __str__(self):
-        """
-        Create an Element according to specifications.
-
-        ['foo', {'x': 'y'}, 'bar'] => <foo x="y">bar</foo>
-        ['foo', ['bar', 'baz']] => <foo><bar>baz</bar></foo>
-        """
-
-        args = iter(self)
-        name = next(args)
-        assert isinstance(name, str)
-
-        children = []
-        attrib = {}
-        text = ''
-
-        for arg in args:
-            if isinstance(arg, (list, tuple)):
-                child = xml(*arg)
-                if child is not None:
-                    children.append(child)
-            elif isinstance(arg, _Element):
-                children.append(arg)
-            elif isinstance(arg, Mapping):
-                for key, value in arg.items():
-                    if value is None:
-                        attrib.pop(key, None)
-                    else:
-                        attrib[key] = value
-            else:
-                arg = str(arg)
-                if arg:
-                    if children:
-                        last_child = children[-1]
-                        last_child.tail = (last_child.tail or '') + arg
-                    else:
-                        text += arg
-
-            node = Element(name, attrib=attrib, **kwargs)
-            if text:
-                node.text = text
-            for child in children:
-                node.append(child)
+        tree = ElementTree(_xml(self))
 
         with StringIO() as fh:
-            ElementTree(node).write(fh, **self.options)
+            tree.write(fh, **self.options)
             return fh.getvalue()
 
 

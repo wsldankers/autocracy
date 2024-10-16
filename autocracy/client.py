@@ -7,15 +7,14 @@ from sys import setswitchinterval
 from traceback import format_exc
 from typing import Any, Optional, Union
 
-import aiohttp.web
+import aiohttp
+import aiohttp.web as web
 
 from .common import load_config, load_policy
 from .decrees.base import BaseRepository
 from .feints import get_feints
 from .rpc import RPC, immediate
 from .utils import *
-
-web = aiohttp.web
 
 
 class Repository(BaseRepository):
@@ -144,6 +143,7 @@ async def main(procname, config_file, *args, **env):
             try:
                 async with session.ws_connect(server, compress=11, ssl=tls) as ws:
                     connect_errors.clear()
+                    warn(f"Connected to {server}")
                     client = Client(config=config, ws=ws)
                     await client()
 

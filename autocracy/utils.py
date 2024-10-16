@@ -379,21 +379,24 @@ _version_split = regcomp(r'([0-9]+)', ASCII).split
 
 def parse_version(s: str) -> tuple[Union[str, int], ...]:
     """
-    Parse a version string into a tuple with alternating string and integer elements.
+    Parse a version string into a tuple with alternating string and integer
+    elements.
 
-    This function takes a version string typically used to denote software versions,
-    and splits it into a tuple. Each numeric segment in the version string is
-    parsed into an integer. Non-numeric characters or segments are left as strings.
-    All odd items are integers, all others are strings.
+    Intended for use as a key= argument to sorting functions.
 
-    This format allows for easy comparison of version numbers when used as the key
-    argument to sorting functions.
+    This function takes a version string typically used to denote software
+    versions, and splits it into a tuple. Each numeric segment in the version
+    string is parsed into an integer. Non-numeric characters or segments are
+    left as strings. All odd items are integers, all others are strings.
+
+    This format allows for easy comparison of version numbers when used as the
+    key argument to sorting functions.
 
     Parameters:
-    s (str): A version string to be parsed.
+        s (str): A version string to be parsed.
 
-    Returns:
-    tuple: A tuple containing integers and strings, representing the parsed version.
+    Returns: tuple: A tuple containing integers and strings, representing the
+    parsed version.
 
     Examples:
     >>> parse_version('1.2.3')

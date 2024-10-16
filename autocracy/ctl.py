@@ -5,7 +5,7 @@ from os import getenv
 from re import compile as regcomp
 from sys import stdout
 
-import aiohttp.web
+import aiohttp
 
 from .rpc import RPC
 from .utils import warn
