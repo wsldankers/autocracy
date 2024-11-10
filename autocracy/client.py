@@ -12,7 +12,7 @@ import aiohttp.web as web
 
 from .common import load_config, load_policy
 from .decrees.base import BaseRepository
-from .feints import get_feints
+from .pretenses import get_pretenses
 from .rpc import RPC, immediate
 from .utils import *
 
@@ -34,7 +34,7 @@ class Repository(BaseRepository):
 
 class Client(Initializer):
     ws: web.WebSocketResponse
-    feints: Optional[dict] = None
+    pretenses: Optional[dict] = None
     config: dict[str, Any]
 
     @weakproperty
@@ -55,8 +55,8 @@ class Client(Initializer):
         return deque()
 
     @initializer
-    def max_feints_interval(self) -> int:
-        return self.config.get('max_feints_interval', 60)
+    def max_pretenses_interval(self) -> int:
+        return self.config.get('max_pretenses_interval', 60)
 
     @initializer
     def dry_run(self) -> bool:
@@ -65,8 +65,8 @@ class Client(Initializer):
     async def apply(self, name, dry_run=False) -> None:
         repository = Repository(files=self.files)
 
-        feints = Object(self.feints or {})
-        policy = load_policy(repository.get_file, name, feints=feints)
+        pretenses = Object(self.pretenses or {})
+        policy = load_policy(repository.get_file, name, pretenses=pretenses)
         policy._provision(repository)
         try:
             return [
@@ -83,33 +83,33 @@ class Client(Initializer):
         for filename in filenames:
             del files[filename]
 
-    async def feints_collector(self) -> None:
-        previous_feints = object()
-        feints_sleep = 0
-        max_feints_interval = self.max_feints_interval
-        feints: Optional[dict[str, Any]]
+    async def pretenses_collector(self) -> None:
+        previous_pretenses = object()
+        pretenses_sleep = 0
+        max_pretenses_interval = self.max_pretenses_interval
+        pretenses: Optional[dict[str, Any]]
         while True:
-            # warn("getting feints")
+            # warn("getting pretenses")
             try:
-                feints = await asyncio.to_thread(get_feints)
+                pretenses = await asyncio.to_thread(get_pretenses)
             except Exception as e:
                 # print_exc()
                 warn(str(e))
-                feints_sleep = max_feints_interval
+                pretenses_sleep = max_pretenses_interval
             else:
-                if feints != previous_feints:
-                    self.feints = previous_feints = feints
-                    feints_sleep = 0
-                    # warn("sending feints")
-                    await self.rpc.remote_command('feints', feints, rsvp=False)
-            feints = None
-            feints_sleep = min(feints_sleep + 1, max_feints_interval)
-            await asyncio.sleep(feints_sleep)
+                if pretenses != previous_pretenses:
+                    self.pretenses = previous_pretenses = pretenses
+                    pretenses_sleep = 0
+                    # warn("sending pretenses")
+                    await self.rpc.remote_command('pretenses', pretenses, rsvp=False)
+            pretenses = None
+            pretenses_sleep = min(pretenses_sleep + 1, max_pretenses_interval)
+            await asyncio.sleep(pretenses_sleep)
 
     async def __call__(self) -> None:
         files = self.files
         pending_files = self.pending_files
-        async with helper_task(self.feints_collector()):
+        async with helper_task(self.pretenses_collector()):
             async for blob in self.rpc:
                 filename = pending_files.popleft()
                 files[Path(filename)] = blob

@@ -11,7 +11,7 @@ from psutil import cpu_count, cpu_freq, net_if_addrs, swap_memory, virtual_memor
 from .utils import get_file
 
 
-def get_interfaces(feints) -> None:
+def get_interfaces(pretenses) -> None:
     interfaces = {}
 
     for name, addrs in net_if_addrs().items():
@@ -35,7 +35,7 @@ def get_interfaces(feints) -> None:
                 interface['mac'] = addr.address
         interfaces[name] = interface
 
-    feints['interfaces'] = {
+    pretenses['interfaces'] = {
         name: {
             family: (
                 [
@@ -55,17 +55,17 @@ def get_interfaces(feints) -> None:
     }
 
 
-def get_hostname(feints) -> None:
-    feints['hostname'] = gethostname()
+def get_hostname(pretenses) -> None:
+    pretenses['hostname'] = gethostname()
 
 
-def get_fqdn(feints) -> None:
-    addrinfo = getaddrinfo(feints['hostname'], 0, flags=AI_CANONNAME)
+def get_fqdn(pretenses) -> None:
+    addrinfo = getaddrinfo(pretenses['hostname'], 0, flags=AI_CANONNAME)
     primary_address = defaultdict(set)
     for addr in addrinfo:
         af, _, _, name, sockaddr = addr
         if name:
-            feints['fqdn'] = name
+            pretenses['fqdn'] = name
         address = ip_address(sockaddr[0])
         if af == AF_INET:
             primary_address['ipv4'].add(address)
@@ -73,24 +73,24 @@ def get_fqdn(feints) -> None:
             primary_address['ipv6'].add(address)
 
     if primary_address:
-        feints['primary_address'] = {
+        pretenses['primary_address'] = {
             family: [str(address) for address in sorted(values)]
             for family, values in primary_address.items()
         }
 
 
-def get_platform(feints) -> None:
-    feints['platform'] = platform
+def get_platform(pretenses) -> None:
+    pretenses['platform'] = platform
 
 
 _uname_fields = ('sysname', 'nodename', 'release', 'version', 'machine')
 
 
-def get_uname(feints) -> None:
-    feints['uname'] = dict(zip(_uname_fields, uname()))
+def get_uname(pretenses) -> None:
+    pretenses['uname'] = dict(zip(_uname_fields, uname()))
 
 
-def get_cpu(feints) -> None:
+def get_cpu(pretenses) -> None:
     cpu = {
         'cores': cpu_count(logical=False),
         'threads': cpu_count(logical=True),
@@ -99,26 +99,26 @@ def get_cpu(feints) -> None:
         cpu['frequency'] = int((Decimal(cpu_freq().max) * 1000000).to_integral_value())
     except NotImplementedError:
         pass
-    feints['cpu'] = cpu
+    pretenses['cpu'] = cpu
 
 
-def get_memory(feints) -> None:
-    feints['memory'] = {
+def get_memory(pretenses) -> None:
+    pretenses['memory'] = {
         'ram': virtual_memory().total,
         'swap': swap_memory().total,
     }
 
 
-def get_qemu(feints) -> None:
+def get_qemu(pretenses) -> None:
     try:
         if get_file('/sys/class/dmi/id/sys_vendor').strip() == 'QEMU':
-            feints['qemu'] = True
+            pretenses['qemu'] = True
     except FileNotFoundError:
         pass
 
 
-def get_feints() -> dict[str, Any]:
-    feints: dict[str, Any] = {}
+def get_pretenses() -> dict[str, Any]:
+    pretenses: dict[str, Any] = {}
     for f in (
         get_interfaces,
         get_hostname,
@@ -129,14 +129,14 @@ def get_feints() -> dict[str, Any]:
         get_memory,
         get_qemu,
     ):
-        f(feints)
+        f(pretenses)
 
         # try:
-        #     f(feints)
+        #     f(pretenses)
         # except Exception as e:
         #     print(str(e), file=stderr, flush=True)
 
-    return feints
+    return pretenses
 
 
-__all__ = ('get_feints',)
+__all__ = ('get_pretenses',)

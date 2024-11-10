@@ -115,11 +115,11 @@ class Admin(BaseClient):
             apply=self.apply,
             online=self.online,
             quit=self.quit,
-            feints=self.feints,
+            pretenses=self.pretenses,
         )
 
-    async def feints(self, name):
-        return (self.server.clients[name].feints,)
+    async def pretenses(self, name):
+        return (self.server.clients[name].pretenses,)
 
     async def online(self):
         return list(self.server.clients)
@@ -166,19 +166,19 @@ class Admin(BaseClient):
 
 
 class Client(BaseClient):
-    feints: Optional[dict] = None
+    pretenses: Optional[dict] = None
     name: str
 
     @weakproperty
     def rpc(self) -> RPC:
-        return RPC(self.ws, feints=self.accept_feints)
+        return RPC(self.ws, pretenses=self.accept_pretenses)
 
     @initializer
     def remotely_known_files(self) -> dict[str, stat_result]:
         return {}
 
-    async def accept_feints(self, feints) -> None:
-        self.feints = feints
+    async def accept_pretenses(self, pretenses) -> None:
+        self.pretenses = pretenses
         # await self.apply()
 
     async def apply(self) -> None:
@@ -187,9 +187,9 @@ class Client(BaseClient):
 
         repository = Repository(root=self.repository_root)
 
-        feints = Object(self.feints or {})
+        pretenses = Object(self.pretenses or {})
 
-        policy = load_policy(repository.get_file, name, feints=feints)
+        policy = load_policy(repository.get_file, name, pretenses=pretenses)
         policy._provision(repository)
 
         rpc = self.rpc
