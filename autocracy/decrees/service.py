@@ -88,20 +88,6 @@ class Service(Initializer, Decree):
                 if active:
                     self._change_active = True
 
-    @property
-    def _summary(self) -> dict[str, Any]:
-        summary = super()._summary
-        update_summary = {}
-        if self._change_enable:
-            update_summary['enable'] = bool(enable)
-        if self._change_active:
-            update_summary['active'] = bool(active)
-        if self._change_mask:
-            update_summary['mask'] = bool(mask)
-        if update_summary:
-            summary['updated'] = update_summary
-        return summary
-
     def _update(self) -> None:
         unit = self.unit
 
@@ -176,6 +162,27 @@ class Service(Initializer, Decree):
 
         command.append(self.unit)
         run(command, check=True, stdin=DEVNULL)
+
+    @property
+    def _summary(self) -> dict[str, Any]:
+        summary = super()._summary
+
+        update_summary = {}
+        if self._change_enable:
+            update_summary['enable'] = bool(enable)
+        if self._change_active:
+            update_summary['active'] = bool(active)
+        if self._change_mask:
+            update_summary['mask'] = bool(mask)
+        if update_summary:
+            summary['updated'] = update_summary
+
+        if self.activated:
+            summary['activated'] = '-or-'.join(
+                method for method in ('reload', 'restart') if getattr(self, method)
+            )
+
+        return summary
 
 
 __all__ = ('Service',)
