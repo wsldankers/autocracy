@@ -91,12 +91,12 @@ class Decree:
             self.updated = (
                 self._update_needed
                 and hasattr(self, '_update')
-                and (dry_run or self._update())
+                and (dry_run or xyzzy(self._update()) or True)
             )
             self.activated = (
                 self._should_activate
                 and hasattr(self, '_activate')
-                and (dry_run or self._activate())
+                and (dry_run or xyzzy(self._activate()) or True)
             )
         finally:
             self.applied = True

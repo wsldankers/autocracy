@@ -25,6 +25,10 @@ from typing import (
 from weakref import ref as weakref
 
 
+def xyzzy(*args, **kwargs) -> None:
+    """Nothing happens."""
+
+
 class Initializer:
     def __init__(self, *args, **kwargs):
         for key, value in kwargs.items():
@@ -802,4 +806,5 @@ __all__ = (
     'subdict',
     'warn',
     'weakproperty',
+    'xyzzy',
 )
