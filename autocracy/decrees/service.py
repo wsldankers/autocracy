@@ -88,6 +88,12 @@ class Service(Initializer, Decree):
                 if active:
                     self._change_active = True
 
+        return (
+            self._change_active is not None
+            or self._change_enable is not None
+            or self._change_mask is not None
+        )
+
     def _update(self) -> None:
         unit = self.unit
 
@@ -100,7 +106,7 @@ class Service(Initializer, Decree):
             else:
                 command.append('unmask')
             command.append(unit)
-            run(command, text=True, check=True, stdin=DEVNULL)
+            run(command, check=True, stdin=DEVNULL)
 
             # Avoid running _systemctl_is_enabled() unless we really need the
             # extra info:
