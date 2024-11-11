@@ -168,12 +168,12 @@ class Service(Initializer, Decree):
         summary = super()._summary
 
         update_summary = {}
-        if self._change_enable:
-            update_summary['enable'] = bool(enable)
-        if self._change_active:
-            update_summary['active'] = bool(active)
-        if self._change_mask:
-            update_summary['mask'] = bool(mask)
+        if self._change_enable is not None:
+            update_summary['enable'] = self._change_enable
+        if self._change_active is not None:
+            update_summary['active'] = self._change_active
+        if self._change_mask is not None:
+            update_summary['mask'] = self._change_mask
         if update_summary:
             summary['updated'] = update_summary
 
