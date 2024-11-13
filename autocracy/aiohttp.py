@@ -24,7 +24,29 @@ from aiohttp.web_runner import TCPSite as BaseTCPSite, UnixSite as BaseUnixSite
 # can be found in "/usr/share/common-licenses/Apache-2.0".
 
 
-class TCPSite(BaseTCPSite):
+class TwoPhaseSiteMixin:
+    async def start_serving(self) -> None:
+        assert self._server is not None
+        await self._server.start_serving()
+
+    async def stop_serving(self) -> None:
+        self._runner._check_site(self)
+        if self._server is None:
+            self._runner._unreg_site(self)
+            return  # not started yet
+        self._server.close()
+
+    async def stop(self) -> None:
+        # named pipes do not have wait_closed property
+        if hasattr(self._server, "wait_closed"):
+            await self._server.wait_closed()
+        await self._runner.shutdown()
+        assert self._runner.server
+        await self._runner.server.shutdown(self._shutdown_timeout)
+        self._runner._unreg_site(self)
+
+
+class TCPSite(TwoPhaseSiteMixin, BaseTCPSite):
     async def start(self) -> None:
         # skip one level in the class hierarchy:
         await super(BaseTCPSite, self).start()
@@ -43,12 +65,8 @@ class TCPSite(BaseTCPSite):
             start_serving=False,
         )
 
-    async def start_serving(self) -> None:
-        assert self._server is not None
-        await self._server.start_serving()
 
-
-class UnixSite(BaseUnixSite):
+class UnixSite(TwoPhaseSiteMixin, BaseUnixSite):
     async def start(self) -> None:
         # skip one level in the class hierarchy:
         await super(BaseUnixSite, self).start()
@@ -63,7 +81,3 @@ class UnixSite(BaseUnixSite):
             backlog=self._backlog,
             start_serving=False,
         )
-
-    async def start_serving(self) -> None:
-        assert self._server is not None
-        await self._server.start_serving()

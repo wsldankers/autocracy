@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from inspect import currentframe
 from pathlib import Path
-from subprocess import run, DEVNULL
+from subprocess import DEVNULL, run
 from typing import TYPE_CHECKING, Any, Iterable, Optional, Sequence, Union
 
 from ..utils import *

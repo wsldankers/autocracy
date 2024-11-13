@@ -29,7 +29,6 @@ from .decrees.base import BaseRepository
 from .rpc import RPC
 from .utils import *
 
-
 peercred_struct = Struct('3i')
 
 
@@ -125,7 +124,7 @@ class Admin(BaseClient):
         return [{name: clients[name].pretenses for name in names}]
 
     async def online(self) -> list:
-        return [list(self.server.clients)]
+        return [sorted(self.server.clients, key=parse_version)]
 
     async def apply(self, *names) -> list[dict]:
         return await self.apply_or_dry_run(names)
@@ -381,7 +380,9 @@ class Server(Initializer):
 
         await self.done
 
-        asyncio.gather(*(site.stop() for site in sites))
+        await asyncio.gather(*(site.stop_serving() for site in sites))
+        await asyncio.gather(*(client.ws.close() for client in self.clients.values()))
+        await asyncio.gather(*(site.stop() for site in sites))
 
 
 async def main(procname, config_file, *args, **env):

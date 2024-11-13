@@ -5,7 +5,7 @@ from json import dumps
 from os import linesep
 from re import compile as regcomp
 from shlex import quote as quote_shell
-from typing import Callable, Optional, Iterable
+from typing import Callable, Iterable, Optional
 
 from lxml.etree import Element, ElementTree, _Element
 
