@@ -42,6 +42,7 @@ class Client(Initializer):
         return RPC(
             self.ws,
             apply=self.apply,
+            dry_run=self.do_dry_run,
             accept_files=immediate(self.accept_files),
             discard_files=immediate(self.discard_files),
         )
@@ -62,7 +63,13 @@ class Client(Initializer):
     def dry_run(self) -> bool:
         return self.config.get('dry_run', True)
 
-    async def apply(self, name, dry_run=False) -> None:
+    async def apply(self, name) -> None:
+        return await self.apply_or_dry_run(name)
+
+    async def do_dry_run(self, name) -> None:
+        return await self.apply_or_dry_run(name, dry_run=True)
+
+    async def apply_or_dry_run(self, name, dry_run=False) -> None:
         repository = Repository(files=self.files)
 
         pretenses = Object(self.pretenses or {})

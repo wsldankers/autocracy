@@ -132,7 +132,7 @@ class RPC(Initializer):
                         except KeyError:
                             warn(f"server got unknown command {command!r}")
                             if cid is not None:
-                                ws.send_json(
+                                await ws.send_json(
                                     [False, cid, f"unknown command {command!r}"]
                                 )
                         else:

@@ -113,18 +113,27 @@ class Admin(BaseClient):
         return RPC(
             self.ws,
             apply=self.apply,
+            dry_run=self.dry_run,
             online=self.online,
             quit=self.quit,
             pretenses=self.pretenses,
         )
 
-    async def pretenses(self, name):
-        return (self.server.clients[name].pretenses,)
+    async def pretenses(self, *names):
+        names = sorted(frozenset(names or self.server.clients))
+        clients = self.server.clients
+        return [{name: clients[name].pretenses for name in names}]
 
-    async def online(self):
-        return list(self.server.clients)
+    async def online(self) -> list:
+        return [list(self.server.clients)]
 
-    async def apply(self, *names):
+    async def apply(self, *names) -> list[dict]:
+        return await self.apply_or_dry_run(names)
+
+    async def dry_run(self, *names) -> list[dict]:
+        return await self.apply_or_dry_run(names, dry_run=True)
+
+    async def apply_or_dry_run(self, names, dry_run=False) -> list[dict]:
         clients = self.server.clients
         if names:
             target_names = set()
@@ -140,10 +149,11 @@ class Admin(BaseClient):
                         warn(f"unknown tag {name!r}, skipping")
                     else:
                         target_names.update(tag)
-
-            targets = (
+                else:
+                    target_names.add(name)
+            targets = [
                 client for name, client in clients.items() if name in target_names
-            )
+            ]
         else:
             targets = clients.values()
 
@@ -151,15 +161,21 @@ class Admin(BaseClient):
             dict(
                 zip(
                     (client.name for client in targets),
-                    await asyncio.gather(*(client.apply() for client in targets)),
+                    await asyncio.gather(
+                        *(
+                            client.apply_or_dry_run(dry_run=dry_run)
+                            for client in targets
+                        )
+                    ),
                 )
-            )
+            ),
         ]
 
-    async def quit(self):
-        await self.server.done.set_result(None)
+    async def quit(self) -> None:
+        self.server.done.set_result(None)
+        return []
 
-    async def __call__(self):
+    async def __call__(self) -> None:
         async for _ in self.rpc:
             warn("binary blob received from client, disconnecting")
             break
@@ -181,7 +197,7 @@ class Client(BaseClient):
         self.pretenses = pretenses
         # await self.apply()
 
-    async def apply(self) -> None:
+    async def apply_or_dry_run(self, dry_run=False) -> None:
         # warn("apply()")
         name = self.name
 
@@ -220,9 +236,12 @@ class Client(BaseClient):
         for file, (_, st) in repository_files.items():
             remotely_known_files[file] = st
 
-        (update_needed,) = await rpc.remote_command('apply', name)
+        (update,) = await rpc.remote_command(
+            'dry_run' if dry_run else 'apply',
+            name,
+        )
 
-        return update_needed
+        return update
 
     async def __call__(self) -> None:
         name = self.name
