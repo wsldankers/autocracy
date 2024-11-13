@@ -96,7 +96,9 @@ def get_cpu(pretenses) -> None:
         'threads': cpu_count(logical=True),
     }
     try:
-        cpu['frequency'] = int((Decimal(cpu_freq().max) * 1000000).to_integral_value())
+        frequency = int((Decimal(cpu_freq().max) * 1000000).to_integral_value())
+        if frequency:
+            cpu['frequency'] = frequency
     except NotImplementedError:
         pass
     pretenses['cpu'] = cpu
@@ -109,9 +111,12 @@ def get_memory(pretenses) -> None:
     }
 
 
-def get_qemu(pretenses) -> None:
+def get_sys_vendor(pretenses) -> None:
     try:
-        if get_file('/sys/class/dmi/id/sys_vendor').strip() == 'QEMU':
+        sys_vendor = get_file('/sys/class/dmi/id/sys_vendor').strip()
+        if sys_vendor:
+            pretenses['sys_vendor'] = sys_vendor
+        if sys_vendor == 'QEMU':
             pretenses['qemu'] = True
     except FileNotFoundError:
         pass
@@ -127,7 +132,7 @@ def get_pretenses() -> dict[str, Any]:
         get_uname,
         get_cpu,
         get_memory,
-        get_qemu,
+        get_sys_vendor,
     ):
         f(pretenses)
 
