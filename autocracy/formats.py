@@ -72,7 +72,7 @@ class KeyValue(dict):
             for value in values:
                 self.print_value(fh, key, value)
         else:
-            self.print_single_value(fh, key, value_separator.join(values))
+            self.print_single_value(fh, key, value_separator.join(map(str, values)))
 
     def print_start_section(self, fh, name) -> None:
         newline = self.newline
