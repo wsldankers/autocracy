@@ -74,7 +74,10 @@ def load_policy(
         get_file, 'policy', **context, **tags, subject=subject
     )
 
-    policy = Policy(**extract_decrees(variables))
+    policy = Policy(
+        dry_run=variables.get('dry_run'),
+        **extract_decrees(variables),
+    )
     policy._prepare('_root')
 
     return policy

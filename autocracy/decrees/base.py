@@ -63,6 +63,7 @@ class Decree:
     activate_if = True
     name = ""
     applied = False
+    dry_run = None
 
     if TYPE_CHECKING:
 
@@ -73,8 +74,10 @@ class Decree:
     else:
         _update_needed = False
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, dry_run=None, **kwargs):
         super().__init__(*args, **kwargs)
+        if dry_run is not None:
+            self.dry_run = dry_run
         (self._file, self._line) = extract_loadfilename_from_frame(currentframe())
 
     def __set_name__(self, objtype, name):
@@ -116,12 +119,12 @@ class Decree:
             self.updated = (
                 self._update_needed
                 and hasattr(self, '_update')
-                and (dry_run or xyzzy(self._update()) or True)
+                and (dry_run or self.dry_run or xyzzy(self._update()) or True)
             )
             self.activated = (
                 self._should_activate
                 and hasattr(self, '_activate')
-                and (dry_run or xyzzy(self._activate()) or True)
+                and (dry_run or self.dry_run or xyzzy(self._activate()) or True)
             )
         finally:
             self.applied = True
@@ -183,12 +186,13 @@ class Group(Initializer, Decree):
             if summary
         }
 
-    def _apply(self, *args, **kwargs) -> dict[str, Any]:
+    def _apply(self, *args, dry_run=None, **kwargs) -> dict[str, Any]:
         if self.applied:
             raise RuntimeError(f"{self}: refused attempt to run twice")
         try:
+            dry_run = dry_run or self.dry_run
             for decree in self._decrees:
-                decree._apply(*args, **kwargs)
+                decree._apply(*args, dry_run=dry_run, **kwargs)
         finally:
             self.applied = True
 
