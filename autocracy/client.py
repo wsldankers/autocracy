@@ -148,6 +148,7 @@ async def main(procname, config_file, *args, **env):
         while True:
             try:
                 async with session.ws_connect(server, compress=11, ssl=tls) as ws:
+                    connect_sleep = 0
                     connect_errors.clear()
                     warn(f"Connected to {server}")
                     client = Client(config=config, ws=ws)
