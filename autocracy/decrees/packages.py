@@ -39,33 +39,55 @@ class Packages(Initializer, Decree):
         (native_arch,) = result.stdout.splitlines()
         default_archs = frozenset((native_arch, 'all'))
 
-        result = run(
-            [
-                'dpkg-query',
-                '-f',
-                r'${Package} ${Architecture} ${Version} ${Status} ${Essential}\n',
-                '-W',
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-            stdin=DEVNULL,
-        )
+        found: set[str] = set()
 
-        installed: set[str] = set()
+        if self.gentle:
+            result = run(
+                ['apt-mark', 'showmanual'],
+                capture_output=True,
+                text=True,
+                check=True,
+                stdin=DEVNULL,
+            )
 
-        for line in result.stdout.splitlines():
-            name, arch, version, want, error, status, essential = line.split()
-            if error != 'ok':
-                raise RuntimeError(f"package {name}:{arch} is in error state {error}")
-            if status == 'installed':
-                installed.add(f"{name}:{arch}")
-                if arch in default_archs:
-                    installed.add(name)
-            elif status != 'config-files':
-                raise RuntimeError(
-                    f"package {name}:{arch} has unknown status '{status}'"
-                )
+            for fullname in result.stdout.splitlines():
+                name, sep, arch = fullname.partition(':')
+                if sep:
+                    found.add(fullname)
+                    if arch in default_archs:
+                        found.add(name)
+                else:
+                    found.add(name)
+                    for arch in default_archs:
+                        found.add(f"{name}:{arch}")
+        else:
+            result = run(
+                [
+                    'dpkg-query',
+                    '-f',
+                    r'${Package} ${Architecture} ${Version} ${Status} ${Essential}\n',
+                    '-W',
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+                stdin=DEVNULL,
+            )
+
+            for line in result.stdout.splitlines():
+                name, arch, version, want, error, status, essential = line.split()
+                if error != 'ok':
+                    raise RuntimeError(
+                        f"package {name}:{arch} is in error state {error}"
+                    )
+                if status == 'installed':
+                    found.add(f"{name}:{arch}")
+                    if arch in default_archs:
+                        found.add(name)
+                elif status != 'config-files':
+                    raise RuntimeError(
+                        f"package {name}:{arch} has unknown status '{status}'"
+                    )
 
         install = set()
         remove = set()
@@ -73,10 +95,10 @@ class Packages(Initializer, Decree):
             if action is None:
                 continue
             if action:
-                if package not in installed:
+                if package not in found:
                     install.add(package)
             else:
-                if package in installed:
+                if package in found:
                     remove.add(package)
 
         return (install, remove)
