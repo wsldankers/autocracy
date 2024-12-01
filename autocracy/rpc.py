@@ -57,7 +57,7 @@ class RPC(Initializer):
     def __init__(self, ws, /, **kwargs):
         super().__init__(ws=ws, routes=kwargs)
 
-    async def remote_command(self, name, *args, rsvp=True, timeout=30):
+    async def remote_command(self, name, *args, rsvp=True, timeout=300):
         """timeout can be None if you want it to wait forever"""
         ws = self.ws
         # warn(f"sending command {name!r} {args=}")

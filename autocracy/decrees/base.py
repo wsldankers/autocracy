@@ -2,7 +2,8 @@ from abc import ABC, abstractmethod
 from inspect import currentframe
 from pathlib import Path
 from subprocess import DEVNULL, run
-from typing import TYPE_CHECKING, Any, Iterable, Optional, Sequence, Union
+from types import FrameType, TracebackType
+from typing import TYPE_CHECKING, Any, Iterable, Optional, Sequence, Tuple, Union
 
 from ..utils import *
 
@@ -11,6 +12,41 @@ class loadfilename(str):
     """To recognize loaded filenames by"""
 
     __slots__ = ()
+
+
+def extract_loadfilename_from_frame(
+    frame: FrameType,
+) -> Union[Tuple[str, int], Tuple[None, None]]:
+    while frame is not None:
+        file = frame.f_code.co_filename
+        if isinstance(file, loadfilename):
+            return (file, frame.f_lineno)
+        frame = frame.f_back
+    return (None, None)
+
+
+def extract_loadfilename_from_traceback(
+    traceback: TracebackType,
+) -> Union[Tuple[str, int], Tuple[None, None]]:
+    while True:
+        next_traceback = traceback.tb_next
+        if next_traceback is None:
+            return extract_loadfilename_from_frame(traceback.tb_frame)
+        traceback = next_traceback
+
+
+def extract_loadfilename_from_exception(
+    exception: BaseException,
+) -> Union[Tuple[str, int], Tuple[None, None]]:
+    return extract_loadfilename_from_traceback(exception.__traceback__)
+
+
+def format_loadfilename_exception(exception: BaseException) -> str:
+    error = str(exception)
+    file, line = extract_loadfilename_from_exception(exception)
+    if file is not None and line is not None:
+        error = f"{file}:{line}: {error}"
+    return error
 
 
 class BaseRepository(ABC, Initializer):
@@ -39,18 +75,7 @@ class Decree:
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        frame = currentframe()
-        while True:
-            frame = frame.f_back
-            if frame is None:
-                self._file = None
-                self._line = None
-                break
-            file = frame.f_code.co_filename
-            if isinstance(file, loadfilename):
-                self._file = file
-                self._line = frame.f_lineno
-                break
+        (self._file, self._line) = extract_loadfilename_from_frame(currentframe())
 
     def __set_name__(self, objtype, name):
         if not self.name:

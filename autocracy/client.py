@@ -4,14 +4,13 @@ from os import umask
 from pathlib import Path
 from ssl import Purpose, TLSVersion, create_default_context
 from sys import setswitchinterval
-from traceback import format_exc
 from typing import Any, Optional, Union
 
 import aiohttp
 import aiohttp.web as web
 
 from .common import load_config, load_policy
-from .decrees.base import BaseRepository
+from .decrees.base import BaseRepository, format_loadfilename_exception
 from .pretenses import get_pretenses
 from .rpc import RPC, immediate
 from .utils import *
@@ -79,8 +78,8 @@ class Client(Initializer):
             return [
                 await asyncio.to_thread(policy._apply, dry_run=dry_run or self.dry_run)
             ]
-        except Exception:
-            return [{'error': format_exc()}]
+        except Exception as exception:
+            return [{'error': format_loadfilename_exception(exception)}]
 
     async def accept_files(self, *filenames) -> None:
         self.pending_files.extend(filenames)

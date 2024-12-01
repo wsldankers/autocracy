@@ -18,14 +18,14 @@ from ssl import CERT_REQUIRED, Purpose, TLSVersion, create_default_context
 from stat import S_ISREG
 from struct import Struct
 from sys import setswitchinterval
-from typing import Iterable, Optional, Union
+from typing import Any, Iterable, Optional, Union
 from weakref import ref as weakref
 
 import aiohttp.web as web
 
 from .aiohttp import TCPSite, UnixSite
 from .common import load_config, load_policy, load_tags
-from .decrees.base import BaseRepository
+from .decrees.base import BaseRepository, format_loadfilename_exception
 from .rpc import RPC
 from .utils import *
 
@@ -196,7 +196,13 @@ class Client(BaseClient):
         self.pretenses = pretenses
         # await self.apply()
 
-    async def apply_or_dry_run(self, dry_run=False) -> None:
+    async def apply_or_dry_run(self, dry_run=False) -> Any:
+        try:
+            return await self._do_apply_or_dry_run(dry_run=dry_run)
+        except BaseException as exception:
+            return {'error': format_loadfilename_exception(exception)}
+
+    async def _do_apply_or_dry_run(self, dry_run=False) -> Any:
         # warn("apply()")
         name = self.name
 
