@@ -14,7 +14,13 @@ from os import (
 from pathlib import Path
 from pwd import getpwnam, getpwuid
 from socket import SO_PEERCRED, SOL_SOCKET
-from ssl import CERT_REQUIRED, Purpose, TLSVersion, create_default_context
+from ssl import (
+    CERT_REQUIRED,
+    VERIFY_CRL_CHECK_LEAF,
+    Purpose,
+    TLSVersion,
+    create_default_context,
+)
 from stat import S_ISREG
 from struct import Struct
 from sys import setswitchinterval
@@ -349,12 +355,15 @@ class Server(Initializer):
         pki_dir = base_dir / 'pki'
 
         tls = create_default_context(
-            Purpose.CLIENT_AUTH, cafile=pki_dir / 'ca' / 'certificate'
+            Purpose.CLIENT_AUTH,
+            cafile=pki_dir / 'ca' / 'certificate',
         )
         if tls.minimum_version < TLSVersion.TLSv1_3:
             tls.minimum_version = TLSVersion.TLSv1_3
+        tls.verify_mode = CERT_REQUIRED | VERIFY_CRL_CHECK_LEAF
         tls.load_cert_chain(base_dir / 'server.crt', base_dir / 'server.key')
-        tls.verify_mode = CERT_REQUIRED
+        tls.load_verify_locations(cafile=pki_dir / 'ca' / 'crl')
+        warn(repr(tls.cert_store_stats()))
 
         weakself = weakref(self)
 

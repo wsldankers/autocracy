@@ -12,6 +12,7 @@ case $1 in configure)
 	fi
 
 	make -C "$cfg/pki" -s ca/certificate
+	make -C "$cfg/pki" -s ca/crl
 
 	key=$cfg/server.key
 	if [ ! -e "$key" ]

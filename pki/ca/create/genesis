@@ -7,3 +7,4 @@ ca/create/reset
 openssl genpkey -algorithm ED25519 -out ca/key
 openssl req -new -config ca/create/config -key ca/key -out ca/request
 openssl ca -utf8 -selfsign -config ca/create/config -batch -out ca/certificate -infiles ca/request
+openssl ca -utf8 -config ca/config -batch -gencrl -out
