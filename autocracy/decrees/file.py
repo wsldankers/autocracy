@@ -506,13 +506,12 @@ class Directory(Initializer, Decree):
                 target,
                 -1 if uid is None else uid,
                 -1 if gid is None else gid,
-                follow_symlinks=False,
             )
 
         if self._needs_chmod:
             mode = self._mode
             assert mode is not None
-            chmod(target, mode, follow_symlinks=False)
+            chmod(target, mode)
 
 
 class Permissions(Initializer, Decree):
@@ -523,6 +522,7 @@ class Permissions(Initializer, Decree):
 
     _needs_chown = False
     _needs_chmod = False
+    _is_symlink = False
 
     @initializer
     def _owner(self) -> tuple[Optional[int], Optional[int]]:
@@ -547,6 +547,7 @@ class Permissions(Initializer, Decree):
                 gid is not None and st.st_gid != gid
             )
             self._needs_chmod = mode is not None and S_IMODE(st.st_mode) != mode
+            self._is_symlink = S_ISLNK(st.st_mode)
 
         return self._needs_chown or self._needs_chmod
 
@@ -565,7 +566,10 @@ class Permissions(Initializer, Decree):
 
         if self._needs_chmod:
             assert self._mode is not None
-            chmod(target, self._mode, follow_symlinks=False)
+            if self._is_symlink:
+                chmod(target, self._mode, follow_symlinks=False)
+            else:
+                chmod(target, self._mode)
 
 
 class Delete(Initializer, Decree):
