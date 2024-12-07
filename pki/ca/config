@@ -29,8 +29,6 @@ organizationName        = optional
 localityName            = optional
 stateOrProvinceName     = optional
 countryName             = optional
-uid                     = optional
-dc                      = optional
 
 [ x509_extensions ]
 basicConstraints        = critical, CA:FALSE
