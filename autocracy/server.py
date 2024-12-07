@@ -147,7 +147,7 @@ class Admin(BaseClient):
                 if name.startswith('@'):
                     if tags is None:
                         repository = Repository(root=self.repository_root)
-                        tags = load_tags(repository.get_file, 'tags')
+                        tags = load_tags(repository.get_file)
                     try:
                         tag = tags[name[1:]]
                     except KeyError:
@@ -312,7 +312,7 @@ class Server(Initializer):
                 warn(f"admin connected: {getpwuid(uid).pw_name}")
                 ws = web.WebSocketResponse(heartbeat=60, compress=False)
                 await ws.prepare(request)
-                admin = Admin(ws=ws, server=self)
+                admin = Admin(ws=ws, server=self, config=self.config)
                 await admin()
         else:
             commonNames = frozenset(
