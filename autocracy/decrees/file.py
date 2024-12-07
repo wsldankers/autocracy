@@ -343,9 +343,9 @@ class RecursiveFiles(Initializer, _FileHandlingMixin, Decree):
     @property
     def _summary(self) -> dict[str, Any]:
         summary = super()._summary
-        summary['updated'] = {
-            actions.target: action.summary for action in self._actions
-        }
+        actions = self._actions
+        if actions:
+            summary['updated'] = {actions.target: action.summary for action in actions}
         return summary
 
     def _update(self) -> None:
