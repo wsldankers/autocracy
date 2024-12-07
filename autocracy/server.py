@@ -360,10 +360,10 @@ class Server(Initializer):
         )
         if tls.minimum_version < TLSVersion.TLSv1_3:
             tls.minimum_version = TLSVersion.TLSv1_3
-        tls.verify_mode = CERT_REQUIRED | VERIFY_CRL_CHECK_LEAF
+        tls.verify_mode = CERT_REQUIRED
+        tls.verify_flags = VERIFY_CRL_CHECK_LEAF
         tls.load_cert_chain(base_dir / 'server.crt', base_dir / 'server.key')
         tls.load_verify_locations(cafile=pki_dir / 'ca' / 'crl')
-        warn(repr(tls.cert_store_stats()))
 
         weakself = weakref(self)
 
