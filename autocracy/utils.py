@@ -802,6 +802,7 @@ __all__ = (
     'string_diff',
     'normalize_path',
     'parallel',
+    'parse_version',
     'put_file',
     'subdict',
     'warn',
